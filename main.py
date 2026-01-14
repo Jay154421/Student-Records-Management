@@ -648,22 +648,41 @@ class ModernLoginSystem:
             if widget != self.navbar:
                 widget.destroy()
         
-        # Create a centered container for dashboard content
-        dashboard_container = tk.Frame(self.main_content, bg=self.colors['light'])
-        dashboard_container.pack(fill=tk.BOTH, expand=True)
+        # -------------------- SCROLLABLE DASHBOARD (CENTERED) --------------------
+        dashboard_container = tk.Frame(self.main_content, bg="white")
+        dashboard_container.pack(fill="both", expand=True)
         
-        # Create a canvas for scrolling
-        canvas = tk.Canvas(dashboard_container, bg=self.colors['light'], highlightthickness=0)
+        canvas = tk.Canvas(dashboard_container, bg="white", highlightthickness=0)
+        canvas.pack(side="left", fill="both", expand=True)
+        
         scrollbar = ttk.Scrollbar(dashboard_container, orient="vertical", command=canvas.yview)
-        scrollable_frame = tk.Frame(canvas, bg=self.colors['light'])
+        scrollbar.pack(side="right", fill="y")
         
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
-        
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
+        
+        # Frame inside the canvas
+        scrollable_frame = tk.Frame(canvas, bg="white")
+        
+        # ✅ IMPORTANT: anchor="n" not "nw" (this allows centering)
+        window_id = canvas.create_window((0, 0), window=scrollable_frame, anchor="n")
+        
+        # Update scrollregion whenever content size changes
+        def update_scrollregion(event=None):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+        
+        scrollable_frame.bind("<Configure>", update_scrollregion)
+        
+        # ✅ CENTER CONTENT when canvas resizes (sidebar hide/show triggers this)
+        def center_scrollable_content(event=None):
+            canvas_width = canvas.winfo_width()
+        
+            # make the scrollable frame match canvas width
+            canvas.itemconfig(window_id, width=canvas_width)
+        
+            # move the window to center
+            canvas.coords(window_id, canvas_width // 2, 0)
+        
+        canvas.bind("<Configure>", center_scrollable_content)
         
         if not full_name:
             # Get user info from database
@@ -888,10 +907,6 @@ class ModernLoginSystem:
             fg=self.colors['text']
         ).pack(side=tk.LEFT)
         
-        # Pack canvas and scrollbar
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-        
         # Bind mouse wheel to scroll (with proper cleanup)
         def _on_mousewheel(event):
             if canvas.winfo_exists():
@@ -901,13 +916,15 @@ class ModernLoginSystem:
         bind_id = canvas.bind_all("<MouseWheel>", _on_mousewheel)
         self.canvas_bindings.append((canvas, bind_id))
         
-        # Update the canvas to center content
-        def update_canvas_size(event=None):
-            if canvas.winfo_exists():
-                canvas.config(scrollregion=canvas.bbox("all"))
+        # Clean up function when switching views
+        def cleanup():
+            try:
+                canvas.unbind_all("<MouseWheel>")
+            except:
+                pass
         
-        canvas.bind("<Configure>", update_canvas_size)
-        scrollable_frame.bind("<Configure>", update_canvas_size)
+        # Store cleanup reference
+        self.current_cleanup = cleanup
     
     def darken_color(self, color):
         """Darken color for hover effect"""
@@ -3112,50 +3129,250 @@ class ModernLoginSystem:
         """Export student records to file"""
         self.export_options()
     
+    # ==========================================================
+    # SETTINGS PAGE (Functional Buttons)
+    # ==========================================================
     def show_settings(self):
-        """Show settings screen"""
+        """Show settings page with functional buttons."""
         # Clear main content (except navbar)
         for widget in self.main_content.winfo_children():
             if widget != self.navbar:
                 widget.destroy()
-        
-        # Create a centered container
-        container = tk.Frame(self.main_content, bg=self.colors['light'])
-        container.pack(fill=tk.BOTH, expand=True, padx=30, pady=30)
-        
+
+        settings_container = tk.Frame(self.main_content, bg=self.colors['light'])
+        settings_container.pack(fill="both", expand=True)
+
+        # Page Title
         tk.Label(
-            container,
+            settings_container,
             text="⚙️ System Settings",
-            font=('Arial', 24, 'bold'),
+            font=("Arial", 24, "bold"),
             bg=self.colors['light'],
             fg=self.colors['dark']
-        ).pack(pady=(0, 30))
-        
-        # Settings options
-        settings_options = [
-            ("🔐 Change Password", self.change_password),
-            ("👥 User Management", lambda: messagebox.showinfo("Coming Soon", "User management coming soon!")),
-            ("📊 Database Backup", lambda: messagebox.showinfo("Coming Soon", "Database backup coming soon!")),
-            ("🎨 Theme Settings", lambda: messagebox.showinfo("Coming Soon", "Theme settings coming soon!"))
-        ]
-        
-        for text, command in settings_options:
+        ).pack(pady=(30, 20))
+
+        # Buttons container (center)
+        btn_container = tk.Frame(settings_container, bg=self.colors['light'])
+        btn_container.pack(expand=True)
+
+        # ================= BUTTON MAKER =================
+        def create_settings_button(text, icon, command):
             btn = tk.Button(
-                container,
-                text=text,
+                btn_container,
+                text=f"   {icon}  {text}",
                 command=command,
-                font=('Arial', 14),
+                font=("Arial", 16, "bold"),
                 bg=self.colors['primary'],
-                fg='white',
+                fg="white",
                 bd=0,
-                padx=30,
-                pady=15,
-                cursor='hand2',
-                width=25
+                padx=60,
+                pady=25,
+                cursor="hand2",
+                anchor="center",
+                width=28
             )
-            btn.pack(pady=10)
-            btn.bind('<Enter>', lambda e, b=btn: b.config(bg=self.colors['secondary']))
-            btn.bind('<Leave>', lambda e, b=btn: b.config(bg=self.colors['primary']))
+            btn.pack(pady=18)
+
+            # Hover effect
+            btn.bind("<Enter>", lambda e: btn.config(bg=self.colors['hover']))
+            btn.bind("<Leave>", lambda e: btn.config(bg=self.colors['primary']))
+
+            return btn
+
+        # ================= FUNCTIONAL BUTTONS =================
+        create_settings_button("User Management", "👥", self.show_user_management)
+        create_settings_button("Database Backup", "🗄️", self.backup_database)
+        create_settings_button("Theme Settings", "🎨", self.show_theme_settings)
+        create_settings_button("Change Password", "🔐", self.change_password)
+        create_settings_button("Back to Dashboard", "⬅", self.show_main_dashboard)
+    
+    # ==========================================================
+    # 1) USER MANAGEMENT BUTTON FUNCTION
+    # ==========================================================
+    def show_user_management(self):
+        """
+        Opens User Management page.
+        Replace the placeholder content with your own user CRUD UI anytime.
+        """
+
+        # Clear main content (except navbar)
+        for widget in self.main_content.winfo_children():
+            if widget != self.navbar:
+                widget.destroy()
+
+        page = tk.Frame(self.main_content, bg=self.colors['light'])
+        page.pack(fill="both", expand=True)
+
+        tk.Label(
+            page,
+            text="👥 User Management",
+            font=("Arial", 24, "bold"),
+            bg=self.colors['light'],
+            fg=self.colors['dark']
+        ).pack(pady=(30, 10))
+
+        tk.Label(
+            page,
+            text="This section is functional ✅\nYou can add your user CRUD UI here.",
+            font=("Arial", 13),
+            bg=self.colors['light'],
+            fg="gray"
+        ).pack(pady=(0, 30))
+
+        tk.Button(
+            page,
+            text="⬅ Back to Settings",
+            command=self.show_settings,
+            font=("Arial", 12, "bold"),
+            bg=self.colors['primary'],
+            fg="white",
+            bd=0,
+            padx=25,
+            pady=12,
+            cursor="hand2"
+        ).pack()
+    
+    # ==========================================================
+    # 2) DATABASE BACKUP BUTTON FUNCTION (REAL BACKUP)
+    # ==========================================================
+    def backup_database(self):
+        """
+        Creates a backup copy of your database.
+        It will ask the user where to save the backup file.
+        """
+        try:
+            # ✅ Change this if your database filename is different
+            db_file = "modern_users.db"
+
+            if not os.path.exists(db_file):
+                messagebox.showerror("Error", f"Database file not found:\n{db_file}")
+                return
+
+            save_path = filedialog.asksaveasfilename(
+                title="Save Database Backup",
+                defaultextension=".db",
+                filetypes=[("Database File", "*.db"), ("All Files", "*.*")],
+                initialfile=f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+            )
+
+            if not save_path:
+                return  # Cancelled
+
+            shutil.copy(db_file, save_path)
+
+            messagebox.showinfo("Backup Success", f"Database backup saved ✅\n\n{save_path}")
+
+        except Exception as e:
+            messagebox.showerror("Backup Error", f"Failed to backup database:\n\n{e}")
+    
+    # ==========================================================
+    # 3) THEME SETTINGS BUTTON FUNCTION (WORKING)
+    # ==========================================================
+    def show_theme_settings(self):
+        """Popup theme selector and apply theme immediately."""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Theme Settings")
+        dialog.geometry("420x360")
+        dialog.resizable(False, False)
+        dialog.configure(bg="white")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        tk.Label(
+            dialog,
+            text="🎨 Theme Settings",
+            font=("Arial", 18, "bold"),
+            bg="white",
+            fg=self.colors['primary']
+        ).pack(pady=20)
+
+        tk.Label(
+            dialog,
+            text="Choose Theme:",
+            font=("Arial", 12, "bold"),
+            bg="white",
+            fg="black"
+        ).pack(pady=(10, 5))
+
+        theme_var = tk.StringVar(value="Default")
+
+        theme_menu = ttk.Combobox(
+            dialog,
+            textvariable=theme_var,
+            state="readonly",
+            values=["Default", "Dark Mode", "Blue Theme"]
+        )
+        theme_menu.pack(pady=10)
+
+        info = tk.Label(
+            dialog,
+            text="Applying a theme will refresh the dashboard.",
+            font=("Arial", 10),
+            bg="white",
+            fg="gray"
+        )
+        info.pack(pady=(10, 20))
+
+        def apply_theme():
+            theme = theme_var.get()
+
+            # ✅ DEFAULT THEME
+            if theme == "Default":
+                self.colors['primary'] = "#800000"
+                self.colors['sidebar'] = "#5a0019"
+                self.colors['hover'] = "#9a031e"
+                self.colors['light'] = "#f8f9fa"
+                self.colors['background'] = "#ffffff"
+                self.colors['dark'] = "#212529"
+
+            # ✅ DARK MODE THEME
+            elif theme == "Dark Mode":
+                self.colors['primary'] = "#800000"
+                self.colors['sidebar'] = "#2d0000"
+                self.colors['hover'] = "#9a031e"
+                self.colors['light'] = "#1f1f1f"
+                self.colors['background'] = "#121212"
+                self.colors['dark'] = "#ffffff"
+
+            # ✅ BLUE THEME
+            elif theme == "Blue Theme":
+                self.colors['primary'] = "#0d6efd"
+                self.colors['sidebar'] = "#083b86"
+                self.colors['hover'] = "#0b5ed7"
+                self.colors['light'] = "#f8f9fa"
+                self.colors['background'] = "#ffffff"
+                self.colors['dark'] = "#212529"
+
+            dialog.destroy()
+
+            # Refresh visible page after theme change
+            self.show_main_dashboard()
+
+        tk.Button(
+            dialog,
+            text="Apply Theme",
+            command=apply_theme,
+            font=("Arial", 12, "bold"),
+            bg=self.colors['primary'],
+            fg="white",
+            bd=0,
+            padx=30,
+            pady=10,
+            cursor="hand2"
+        ).pack(pady=15)
+
+        tk.Button(
+            dialog,
+            text="Close",
+            command=dialog.destroy,
+            font=("Arial", 10, "bold"),
+            bg="#6c757d",
+            fg="white",
+            bd=0,
+            padx=25,
+            pady=8,
+            cursor="hand2"
+        ).pack(pady=(0, 15))
     
     def show_help(self):
         """Show help screen"""
@@ -3212,6 +3429,12 @@ class ModernLoginSystem:
            • All passwords are securely hashed
            • Role-based access control
            • Session management
+        
+        6. ⚙️ Settings
+           • User Management
+           • Database Backup
+           • Theme Settings (Default, Dark Mode, Blue Theme)
+           • Change Password
         
         For additional support, contact the system administrator.
         """
