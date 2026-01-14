@@ -18,11 +18,11 @@ import tempfile
 
 class ModernLoginSystem:
     def __init__(self):
-        # Colors for modern theme
+        # Colors for modern theme - Maroon & Gold
         self.colors = {
-            'primary': '#0056A6',  # SPC Blue
+            'primary': '#800000',  # Maroon
             'secondary': '#FFD700',  # Gold
-            'accent': '#C8102E',  # Crimson
+            'accent': '#C41E3A',  # Crimson
             'light': '#f8f9fa',
             'dark': '#212529',
             'success': '#28a745',
@@ -33,9 +33,11 @@ class ModernLoginSystem:
             'card_bg': '#f8f9fa',
             'text': '#2b2d42',
             'transparent': '#ffffff00',
-            'navbar': '#0056A6',  # SPC Blue for navbar
-            'sidebar': '#1E3A5F',  # Dark blue for sidebar
-            'hover': '#2C5282'  # Sidebar hover
+            'navbar': '#800000',  # Maroon for navbar
+            'sidebar': '#5a0019',  # Dark maroon for sidebar
+            'hover': '#9a031e',  # Sidebar hover
+            'sidebar_text': '#ffffff',
+            'active_item': '#9a031e'
         }
         
         # Create attachments directory if it doesn't exist
@@ -55,6 +57,9 @@ class ModernLoginSystem:
         # Current user information
         self.current_user = None
         self.current_role = None
+        
+        # Store mouse wheel bindings
+        self.canvas_bindings = []
         
         # Try to load SPC logo
         self.spc_logo = None
@@ -464,83 +469,16 @@ class ModernLoginSystem:
         for widget in self.root.winfo_children():
             widget.destroy()
         
-        # Dashboard container
-        self.dashboard_frame = tk.Frame(self.root, bg=self.colors['background'])
-        self.dashboard_frame.pack(fill=tk.BOTH, expand=True)
+        # Main container
+        self.main_container = tk.Frame(self.root, bg=self.colors['background'])
+        self.main_container.pack(fill=tk.BOTH, expand=True)
         
-        # Top navbar (inspired by image.png)
-        navbar = tk.Frame(self.dashboard_frame, bg=self.colors['navbar'], height=70)
-        navbar.pack(fill=tk.X)
-        navbar.pack_propagate(False)
-        
-        # Left side - Hamburger menu for sidebar toggle
-        self.hamburger_btn = tk.Button(
-            navbar,
-            text="☰",
-            font=('Arial', 20),
-            bg=self.colors['navbar'],
-            fg='white',
-            bd=0,
-            command=self.toggle_sidebar,
-            cursor='hand2'
-        )
-        self.hamburger_btn.pack(side=tk.LEFT, padx=20)
-        
-        # Center - App title
-        tk.Label(
-            navbar,
-            text="Student Records Management System",
-            font=('Arial', 20, 'bold'),
-            fg='white',
-            bg=self.colors['navbar']
-        ).pack(side=tk.LEFT, padx=10)
-        
-        # Right side - User info and quick links
-        user_info_frame = tk.Frame(navbar, bg=self.colors['navbar'])
-        user_info_frame.pack(side=tk.RIGHT, padx=20)
-        
-        # Quick links inspired by image.png
-        quick_links = []
-        for link in quick_links:
-            link_label = tk.Label(
-                user_info_frame,
-                text=link,
-                font=('Arial', 9, 'bold'),
-                fg='white',
-                bg=self.colors['navbar'],
-                cursor='hand2'
-            )
-            link_label.pack(side=tk.LEFT, padx=10)
-            link_label.bind('<Enter>', lambda e, l=link_label: l.config(fg=self.colors['secondary']))
-            link_label.bind('<Leave>', lambda e, l=link_label: l.config(fg='white'))
-        
-        # Separator
-        tk.Frame(user_info_frame, bg='white', width=1, height=20).pack(side=tk.LEFT, padx=10)
-        
-        # User avatar and name
-        avatar_frame = tk.Frame(user_info_frame, bg=self.colors['navbar'], cursor='hand2')
-        avatar_frame.pack(side=tk.LEFT, padx=10)
-        
-        avatar_label = tk.Label(
-            avatar_frame,
-            text="👤",
-            font=('Arial', 16),
-            bg=self.colors['navbar'],
-            fg='white'
-        )
-        avatar_label.pack(side=tk.LEFT)
-        
-        user_label = tk.Label(
-            avatar_frame,
-            text=full_name.split()[0],  # First name only
-            font=('Arial', 11, 'bold'),
-            fg='white',
-            bg=self.colors['navbar']
-        )
-        user_label.pack(side=tk.LEFT, padx=5)
+        # Create main frame with sidebar and content
+        self.main_frame = tk.Frame(self.main_container, bg=self.colors['background'])
+        self.main_frame.pack(fill=tk.BOTH, expand=True)
         
         # Sidebar
-        self.sidebar = tk.Frame(self.dashboard_frame, bg=self.colors['sidebar'], width=self.sidebar_width)
+        self.sidebar = tk.Frame(self.main_frame, bg=self.colors['sidebar'], width=self.sidebar_width)
         self.sidebar.pack(side=tk.LEFT, fill=tk.Y)
         self.sidebar.pack_propagate(False)
         
@@ -584,6 +522,8 @@ class ModernLoginSystem:
             ("🚪", "Logout", self.logout)
         ]
         
+        self.menu_frames = []
+        
         for icon, text, command in self.menu_items:
             item_frame = tk.Frame(self.sidebar, bg=self.colors['sidebar'], height=50)
             item_frame.pack(fill=tk.X, padx=10, pady=2)
@@ -594,7 +534,7 @@ class ModernLoginSystem:
                 text=icon,
                 font=('Arial', 16),
                 bg=self.colors['sidebar'],
-                fg='white'
+                fg=self.colors['sidebar_text']
             )
             icon_label.pack(side=tk.LEFT, padx=15)
             
@@ -603,7 +543,7 @@ class ModernLoginSystem:
                 text=text,
                 font=('Arial', 12),
                 bg=self.colors['sidebar'],
-                fg='white'
+                fg=self.colors['sidebar_text']
             )
             text_label.pack(side=tk.LEFT)
             
@@ -621,41 +561,100 @@ class ModernLoginSystem:
             
             text_label.bind('<Enter>', lambda e, f=item_frame: f.config(bg=self.colors['hover']))
             text_label.bind('<Leave>', lambda e, f=item_frame: f.config(bg=self.colors['sidebar']))
+            
+            self.menu_frames.append(item_frame)
         
         # Main content area
-        self.main_content = tk.Frame(self.dashboard_frame, bg=self.colors['light'])
-        self.main_content.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+        self.main_content = tk.Frame(self.main_frame, bg=self.colors['light'])
+        self.main_content.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        # Top navbar
+        self.navbar = tk.Frame(self.main_content, bg=self.colors['navbar'], height=70)
+        self.navbar.pack(fill=tk.X)
+        self.navbar.pack_propagate(False)
+        
+        # Hamburger menu for sidebar toggle
+        self.hamburger_btn = tk.Button(
+            self.navbar,
+            text="☰",
+            font=('Arial', 20),
+            bg=self.colors['navbar'],
+            fg='white',
+            bd=0,
+            command=self.toggle_sidebar,
+            cursor='hand2'
+        )
+        self.hamburger_btn.pack(side=tk.LEFT, padx=20)
+        
+        # Center - App title
+        self.navbar_title = tk.Label(
+            self.navbar,
+            text="Student Records Management System",
+            font=('Arial', 20, 'bold'),
+            fg='white',
+            bg=self.colors['navbar']
+        )
+        self.navbar_title.pack(side=tk.LEFT, padx=10)
+        
+        # Right side - User info
+        user_info_frame = tk.Frame(self.navbar, bg=self.colors['navbar'])
+        user_info_frame.pack(side=tk.RIGHT, padx=20)
+        
+        # User avatar and name
+        avatar_frame = tk.Frame(user_info_frame, bg=self.colors['navbar'], cursor='hand2')
+        avatar_frame.pack(side=tk.LEFT, padx=10)
+        
+        avatar_label = tk.Label(
+            avatar_frame,
+            text="👤",
+            font=('Arial', 16),
+            bg=self.colors['navbar'],
+            fg='white'
+        )
+        avatar_label.pack(side=tk.LEFT)
+        
+        user_label = tk.Label(
+            avatar_frame,
+            text=full_name.split()[0],  # First name only
+            font=('Arial', 11, 'bold'),
+            fg='white',
+            bg=self.colors['navbar']
+        )
+        user_label.pack(side=tk.LEFT, padx=5)
         
         # Show main dashboard by default
         self.show_main_dashboard(full_name, role, email)
     
     def toggle_sidebar(self):
-        """Toggle sidebar visibility"""
+        """Toggle sidebar visibility with smooth animation"""
         if self.sidebar_visible:
+            # Hide sidebar
             self.sidebar.pack_forget()
-            self.sidebar_visible = False
             self.hamburger_btn.config(text="☰")
+            self.sidebar_visible = False
         else:
-            self.sidebar.pack(side=tk.LEFT, fill=tk.Y)
-            self.sidebar_visible = True
+            # Show sidebar
+            self.sidebar.pack(side=tk.LEFT, fill=tk.Y, before=self.main_content)
             self.hamburger_btn.config(text="✕")
+            self.sidebar_visible = True
+        
+        # Update layout
+        self.main_frame.update_idletasks()
     
     def show_main_dashboard(self, full_name=None, role=None, email=None):
         """Show main dashboard content"""
-        # Clear main content
+        # Clear main content (except navbar)
         for widget in self.main_content.winfo_children():
-            widget.destroy()
+            if widget != self.navbar:
+                widget.destroy()
         
-        if not full_name:
-            # Get user info from database
-            self.cursor.execute('SELECT full_name, role, email FROM users WHERE id = ?', (self.current_user,))
-            user_info = self.cursor.fetchone()
-            if user_info:
-                full_name, role, email = user_info
+        # Create a centered container for dashboard content
+        dashboard_container = tk.Frame(self.main_content, bg=self.colors['light'])
+        dashboard_container.pack(fill=tk.BOTH, expand=True)
         
         # Create a canvas for scrolling
-        canvas = tk.Canvas(self.main_content, bg=self.colors['light'], highlightthickness=0)
-        scrollbar = ttk.Scrollbar(self.main_content, orient="vertical", command=canvas.yview)
+        canvas = tk.Canvas(dashboard_container, bg=self.colors['light'], highlightthickness=0)
+        scrollbar = ttk.Scrollbar(dashboard_container, orient="vertical", command=canvas.yview)
         scrollable_frame = tk.Frame(canvas, bg=self.colors['light'])
         
         scrollable_frame.bind(
@@ -666,11 +665,18 @@ class ModernLoginSystem:
         canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
         
+        if not full_name:
+            # Get user info from database
+            self.cursor.execute('SELECT full_name, role, email FROM users WHERE id = ?', (self.current_user,))
+            user_info = self.cursor.fetchone()
+            if user_info:
+                full_name, role, email = user_info
+        
         # Welcome message card
         welcome_card = tk.Frame(scrollable_frame, bg='white', relief='solid', bd=1)
         welcome_card.pack(fill=tk.X, padx=30, pady=30)
         
-        # Header with SPC colors
+        # Header with maroon colors
         welcome_header = tk.Frame(welcome_card, bg=self.colors['primary'], height=50)
         welcome_header.pack(fill=tk.X)
         welcome_header.pack_propagate(False)
@@ -724,9 +730,8 @@ class ModernLoginSystem:
         ]
         
         for title, value, color, icon in stats_data:
-            card = tk.Frame(stats_frame, bg='white', width=200, height=120, relief='solid', bd=1)
+            card = tk.Frame(stats_frame, bg='white', height=120, relief='solid', bd=1)
             card.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 20))
-            card.pack_propagate(False)
             
             # Card header
             card_header = tk.Frame(card, bg=color, height=30)
@@ -870,7 +875,7 @@ class ModernLoginSystem:
             btn.bind('<Enter>', lambda e, b=btn, c=color: b.config(bg=self.darken_color(c)))
             btn.bind('<Leave>', lambda e, b=btn, c=color: b.config(bg=c))
         
-        # Footer
+        # Footer (NO LOGOUT BUTTON - removed as requested)
         footer_frame = tk.Frame(scrollable_frame, bg=self.colors['light'], height=50)
         footer_frame.pack(fill=tk.X, padx=30, pady=(0, 20))
         footer_frame.pack_propagate(False)
@@ -883,37 +888,31 @@ class ModernLoginSystem:
             fg=self.colors['text']
         ).pack(side=tk.LEFT)
         
-        # Logout button at bottom
-        logout_btn = tk.Button(
-            footer_frame,
-            text="🚪 Logout",
-            command=self.logout,
-            font=('Arial', 10),
-            bg=self.colors['danger'],
-            fg='white',
-            bd=0,
-            padx=20,
-            pady=8,
-            cursor='hand2'
-        )
-        logout_btn.pack(side=tk.RIGHT)
-        logout_btn.bind('<Enter>', lambda e: logout_btn.config(bg='#d90429'))
-        logout_btn.bind('<Leave>', lambda e: logout_btn.config(bg=self.colors['danger']))
-        
         # Pack canvas and scrollbar
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
         
-        # Bind mouse wheel to scroll
+        # Bind mouse wheel to scroll (with proper cleanup)
         def _on_mousewheel(event):
-            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+            if canvas.winfo_exists():
+                canvas.yview_scroll(int(-1*(event.delta/120)), "units")
         
-        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        # Store binding ID for cleanup
+        bind_id = canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        self.canvas_bindings.append((canvas, bind_id))
+        
+        # Update the canvas to center content
+        def update_canvas_size(event=None):
+            if canvas.winfo_exists():
+                canvas.config(scrollregion=canvas.bbox("all"))
+        
+        canvas.bind("<Configure>", update_canvas_size)
+        scrollable_frame.bind("<Configure>", update_canvas_size)
     
     def darken_color(self, color):
         """Darken color for hover effect"""
         if color == self.colors['primary']:
-            return '#004080'
+            return '#5a0019'
         elif color == self.colors['success']:
             return '#218838'
         elif color == self.colors['info']:
@@ -925,11 +924,12 @@ class ModernLoginSystem:
     
     def show_credentials(self):
         """Show student records management screen"""
-        # Clear main content
+        # Clear main content (except navbar)
         for widget in self.main_content.winfo_children():
-            widget.destroy()
+            if widget != self.navbar:
+                widget.destroy()
         
-        # Create a main container with scrollbar
+        # Create a centered container
         main_container = tk.Frame(self.main_content, bg=self.colors['light'])
         main_container.pack(fill=tk.BOTH, expand=True)
         
@@ -1034,7 +1034,6 @@ class ModernLoginSystem:
         # Student records list frame
         list_frame = tk.Frame(scrollable_frame, bg=self.colors['light'])
         list_frame.pack(fill=tk.BOTH, expand=True, padx=30, pady=(0, 30))
-        list_frame.pack_propagate(True)
         
         # Create treeview for student records
         columns = ('ID', 'ID Number', 'First Name', 'Last Name', 'Category', 'Attachments', 'Last Updated')
@@ -1126,11 +1125,14 @@ class ModernLoginSystem:
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
         
-        # Bind mouse wheel to scroll
+        # Bind mouse wheel to scroll (with proper cleanup)
         def _on_mousewheel(event):
-            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+            if canvas.winfo_exists():
+                canvas.yview_scroll(int(-1*(event.delta/120)), "units")
         
-        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        # Store binding ID for cleanup
+        bind_id = canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        self.canvas_bindings.append((canvas, bind_id))
         
         # Load student records
         self.load_credentials()
@@ -1302,7 +1304,7 @@ class ModernLoginSystem:
                 'CustomTitle',
                 parent=styles['Heading1'],
                 fontSize=20,
-                textColor=colors.HexColor('#0056A6'),  # SPC Blue
+                textColor=colors.HexColor('#800000'),  # Maroon
                 spaceAfter=30
             )
             
@@ -1343,7 +1345,7 @@ class ModernLoginSystem:
             
             # Style the table
             table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0056A6')),  # SPC Blue
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#800000')),  # Maroon
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
@@ -1437,7 +1439,7 @@ class ModernLoginSystem:
                 'CustomTitle',
                 parent=styles['Heading1'],
                 fontSize=20,
-                textColor=colors.HexColor('#0056A6'),  # SPC Blue
+                textColor=colors.HexColor('#800000'),  # Maroon
                 spaceAfter=30
             )
             
@@ -1482,7 +1484,7 @@ class ModernLoginSystem:
             
             info_table = Table(info_data, colWidths=[2*inch, 4*inch])
             info_table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0056A6')),  # SPC Blue
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#800000')),  # Maroon
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
                 ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
@@ -1567,7 +1569,7 @@ class ModernLoginSystem:
                 'CustomTitle',
                 parent=styles['Heading1'],
                 fontSize=20,
-                textColor=colors.HexColor('#0056A6'),  # SPC Blue
+                textColor=colors.HexColor('#800000'),  # Maroon
                 spaceAfter=30
             )
             
@@ -1621,7 +1623,7 @@ class ModernLoginSystem:
                 
                 cat_table = Table(cat_data, colWidths=[2*inch, 1.5*inch, 1.5*inch])
                 cat_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0056A6')),  # SPC Blue
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#800000')),  # Maroon
                     ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
                     ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                     ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
@@ -1654,7 +1656,7 @@ class ModernLoginSystem:
                 
                 month_table = Table(month_data, colWidths=[2*inch, 2*inch])
                 month_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#C8102E')),  # SPC Crimson
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#C41E3A')),  # Crimson
                     ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
                     ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                     ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
@@ -1746,7 +1748,7 @@ class ModernLoginSystem:
                 'CustomTitle',
                 parent=styles['Heading1'],
                 fontSize=20,
-                textColor=colors.HexColor('#0056A6'),  # SPC Blue
+                textColor=colors.HexColor('#800000'),  # Maroon
                 spaceAfter=30
             )
             
@@ -1894,9 +1896,10 @@ class ModernLoginSystem:
         canvas.configure(yscrollcommand=scrollbar.set)
 
         def center_scrollable_content(event=None):
-            canvas_width = canvas.winfo_width()
-            canvas.itemconfig(window_id, width=canvas_width)
-            canvas.coords(window_id, canvas_width // 2, 0)
+            if canvas.winfo_exists():
+                canvas_width = canvas.winfo_width()
+                canvas.itemconfig(window_id, width=canvas_width)
+                canvas.coords(window_id, canvas_width // 2, 0)
 
         canvas.bind("<Configure>", center_scrollable_content)
         
@@ -1973,7 +1976,8 @@ class ModernLoginSystem:
             
             # Update scrollable area
             scrollable_frame.update_idletasks()
-            canvas.configure(scrollregion=canvas.bbox("all"))
+            if canvas.winfo_exists():
+                canvas.configure(scrollregion=canvas.bbox("all"))
         
         category_var.trace_add('write', on_category_change)
         
@@ -2000,7 +2004,7 @@ class ModernLoginSystem:
         graduate_entries = {}
 
         for label_text, placeholder in graduate_fields:
-            # ✅ Label (same style)
+            # Label (same style)
             label = tk.Label(
                 form_container,
                 text=label_text,
@@ -2009,11 +2013,11 @@ class ModernLoginSystem:
                 bg=self.colors['background']
             )
 
-            # ✅ Frame (same as First Name)
+            # Frame (same as First Name)
             frame = tk.Frame(form_container, bg=self.colors['card_bg'], height=40)
             frame.pack_propagate(False)
 
-            # ✅ Entry (same padding)
+            # Entry (same padding)
             entry = tk.Entry(frame, font=('Arial', 11), bd=0, bg=self.colors['card_bg'])
             entry.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=15)
             entry.insert(0, placeholder)
@@ -2253,12 +2257,6 @@ class ModernLoginSystem:
         # Pack canvas and scrollbar
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
-        
-        # Bind mouse wheel to scroll
-        def _on_mousewheel(event):
-            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-        
-        canvas.bind_all("<MouseWheel>", _on_mousewheel)
     
     def edit_credential(self):
         """Edit selected student record"""
@@ -2318,9 +2316,10 @@ class ModernLoginSystem:
         canvas.configure(yscrollcommand=scrollbar.set)
 
         def center_scrollable_content(event=None):
-            canvas_width = canvas.winfo_width()
-            canvas.itemconfig(window_id, width=canvas_width)
-            canvas.coords(window_id, canvas_width // 2, 0)
+            if canvas.winfo_exists():
+                canvas_width = canvas.winfo_width()
+                canvas.itemconfig(window_id, width=canvas_width)
+                canvas.coords(window_id, canvas_width // 2, 0)
 
         canvas.bind("<Configure>", center_scrollable_content)
         
@@ -2401,7 +2400,8 @@ class ModernLoginSystem:
             
             # Update scrollable area
             scrollable_frame.update_idletasks()
-            canvas.configure(scrollregion=canvas.bbox("all"))
+            if canvas.winfo_exists():
+                canvas.configure(scrollregion=canvas.bbox("all"))
         
         category_var.trace_add('write', on_category_change)
         
@@ -2708,12 +2708,6 @@ class ModernLoginSystem:
         # Pack canvas and scrollbar
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
-        
-        # Bind mouse wheel to scroll
-        def _on_mousewheel(event):
-            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-        
-        canvas.bind_all("<MouseWheel>", _on_mousewheel)
     
     def view_credential(self):
         """View selected student record details with image display"""
@@ -2818,7 +2812,8 @@ class ModernLoginSystem:
             
             # Function to configure canvas
             def configure_images_canvas(e):
-                images_canvas.configure(scrollregion=images_canvas.bbox("all"))
+                if images_canvas.winfo_exists():
+                    images_canvas.configure(scrollregion=images_canvas.bbox("all"))
             
             images_inner_frame.bind("<Configure>", configure_images_canvas)
             
@@ -3009,11 +3004,19 @@ class ModernLoginSystem:
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
         
-        # Bind mouse wheel to scroll
-        def _on_mousewheel(event):
-            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        # Clean up mouse wheel bindings when dialog is closed
+        def on_dialog_close():
+            dialog.destroy()
+            # Clean up any remaining bindings
+            for canvas_obj, bind_id in self.canvas_bindings[:]:
+                if not canvas_obj.winfo_exists():
+                    try:
+                        canvas_obj.unbind_all("<MouseWheel>")
+                    except:
+                        pass
+                    self.canvas_bindings.remove((canvas_obj, bind_id))
         
-        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        dialog.protocol("WM_DELETE_WINDOW", on_dialog_close)
     
     def open_file(self, filepath):
         """Open a file using the default system application"""
@@ -3111,31 +3114,116 @@ class ModernLoginSystem:
     
     def show_settings(self):
         """Show settings screen"""
-        # Clear main content
+        # Clear main content (except navbar)
         for widget in self.main_content.winfo_children():
-            widget.destroy()
+            if widget != self.navbar:
+                widget.destroy()
+        
+        # Create a centered container
+        container = tk.Frame(self.main_content, bg=self.colors['light'])
+        container.pack(fill=tk.BOTH, expand=True, padx=30, pady=30)
         
         tk.Label(
-            self.main_content,
-            text="⚙️ Settings",
+            container,
+            text="⚙️ System Settings",
             font=('Arial', 24, 'bold'),
             bg=self.colors['light'],
             fg=self.colors['dark']
-        ).pack(pady=50)
+        ).pack(pady=(0, 30))
+        
+        # Settings options
+        settings_options = [
+            ("🔐 Change Password", self.change_password),
+            ("👥 User Management", lambda: messagebox.showinfo("Coming Soon", "User management coming soon!")),
+            ("📊 Database Backup", lambda: messagebox.showinfo("Coming Soon", "Database backup coming soon!")),
+            ("🎨 Theme Settings", lambda: messagebox.showinfo("Coming Soon", "Theme settings coming soon!"))
+        ]
+        
+        for text, command in settings_options:
+            btn = tk.Button(
+                container,
+                text=text,
+                command=command,
+                font=('Arial', 14),
+                bg=self.colors['primary'],
+                fg='white',
+                bd=0,
+                padx=30,
+                pady=15,
+                cursor='hand2',
+                width=25
+            )
+            btn.pack(pady=10)
+            btn.bind('<Enter>', lambda e, b=btn: b.config(bg=self.colors['secondary']))
+            btn.bind('<Leave>', lambda e, b=btn: b.config(bg=self.colors['primary']))
     
     def show_help(self):
         """Show help screen"""
-        # Clear main content
+        # Clear main content (except navbar)
         for widget in self.main_content.winfo_children():
-            widget.destroy()
+            if widget != self.navbar:
+                widget.destroy()
+        
+        # Create a centered container
+        container = tk.Frame(self.main_content, bg=self.colors['light'])
+        container.pack(fill=tk.BOTH, expand=True, padx=30, pady=30)
         
         tk.Label(
-            self.main_content,
+            container,
             text="🆘 Help & Support",
             font=('Arial', 24, 'bold'),
             bg=self.colors['light'],
             fg=self.colors['dark']
-        ).pack(pady=50)
+        ).pack(pady=(0, 30))
+        
+        # Help content
+        help_content = tk.Frame(container, bg='white', relief='solid', bd=1, padx=20, pady=20)
+        help_content.pack(fill=tk.BOTH, expand=True)
+        
+        help_text = """
+        Student Records Management System - User Guide
+        
+        1. 📋 Student Records Management
+           • Add new students using the 'Add New Student' button
+           • Edit existing records by selecting and clicking 'Edit'
+           • Delete records by selecting and clicking 'Delete'
+           • View details by double-clicking or clicking 'View'
+        
+        2. 📤 Export Options
+           • Export all records as PDF
+           • Export selected student record
+           • Export system statistics
+           • Export with attached images
+        
+        3. 🎓 Graduate vs Undergraduate
+           • Graduate students have additional fields:
+             - Last School Year Attended
+             - Contact Number
+             - SO Number
+             - Date Issued
+             - Series of Year
+        
+        4. 📁 Attachments
+           • Upload images and documents for each student
+           • View attachments in the student details view
+           • Open attachments directly from the system
+        
+        5. 🔐 Security
+           • All passwords are securely hashed
+           • Role-based access control
+           • Session management
+        
+        For additional support, contact the system administrator.
+        """
+        
+        tk.Label(
+            help_content,
+            text=help_text,
+            font=('Arial', 11),
+            bg='white',
+            fg=self.colors['text'],
+            justify='left'
+        ).pack(anchor='w')
     
     def request_credentials(self):
         """Handle credentials request"""
@@ -3145,11 +3233,131 @@ class ModernLoginSystem:
     
     def change_password(self):
         """Open change password window"""
-        messagebox.showinfo("Coming Soon", "Change password feature coming soon!")
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Change Password")
+        dialog.geometry("400x300")
+        dialog.configure(bg=self.colors['background'])
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        # Center dialog
+        dialog.update_idletasks()
+        x = (self.root.winfo_screenwidth() // 2) - (400 // 2)
+        y = (self.root.winfo_screenheight() // 2) - (300 // 2)
+        dialog.geometry(f'400x300+{x}+{y}')
+        
+        tk.Label(
+            dialog,
+            text="🔐 Change Password",
+            font=('Arial', 20, 'bold'),
+            fg=self.colors['primary'],
+            bg=self.colors['background']
+        ).pack(pady=(30, 20))
+        
+        # Current password
+        tk.Label(
+            dialog,
+            text="Current Password:",
+            font=('Arial', 11),
+            fg=self.colors['text'],
+            bg=self.colors['background']
+        ).pack(anchor='w', padx=50, pady=(10, 5))
+        
+        current_pass = tk.Entry(dialog, font=('Arial', 11), show="•", width=30)
+        current_pass.pack(pady=(0, 15))
+        
+        # New password
+        tk.Label(
+            dialog,
+            text="New Password:",
+            font=('Arial', 11),
+            fg=self.colors['text'],
+            bg=self.colors['background']
+        ).pack(anchor='w', padx=50, pady=(10, 5))
+        
+        new_pass = tk.Entry(dialog, font=('Arial', 11), show="•", width=30)
+        new_pass.pack(pady=(0, 15))
+        
+        # Confirm new password
+        tk.Label(
+            dialog,
+            text="Confirm New Password:",
+            font=('Arial', 11),
+            fg=self.colors['text'],
+            bg=self.colors['background']
+        ).pack(anchor='w', padx=50, pady=(10, 5))
+        
+        confirm_pass = tk.Entry(dialog, font=('Arial', 11), show="•", width=30)
+        confirm_pass.pack(pady=(0, 20))
+        
+        def update_password():
+            """Update password in database"""
+            current = current_pass.get()
+            new = new_pass.get()
+            confirm = confirm_pass.get()
+            
+            if not current or not new or not confirm:
+                messagebox.showerror("Error", "All fields are required")
+                return
+            
+            if new != confirm:
+                messagebox.showerror("Error", "New passwords do not match")
+                return
+            
+            # Verify current password
+            hashed_current = self.hash_password(current)
+            self.cursor.execute('SELECT password FROM users WHERE id = ?', (self.current_user,))
+            db_password = self.cursor.fetchone()[0]
+            
+            if hashed_current != db_password:
+                messagebox.showerror("Error", "Current password is incorrect")
+                return
+            
+            # Update password
+            hashed_new = self.hash_password(new)
+            self.cursor.execute('UPDATE users SET password = ? WHERE id = ?', (hashed_new, self.current_user))
+            self.conn.commit()
+            
+            messagebox.showinfo("Success", "Password updated successfully!")
+            dialog.destroy()
+        
+        # Update button
+        update_btn = tk.Button(
+            dialog,
+            text="Update Password",
+            command=update_password,
+            font=('Arial', 12, 'bold'),
+            bg=self.colors['primary'],
+            fg='white',
+            bd=0,
+            padx=20,
+            pady=10,
+            cursor='hand2'
+        )
+        update_btn.pack(pady=10)
+        update_btn.bind('<Enter>', lambda e: update_btn.config(bg=self.colors['secondary']))
+        update_btn.bind('<Leave>', lambda e: update_btn.config(bg=self.colors['primary']))
+        
+        # Cancel button
+        cancel_btn = tk.Button(
+            dialog,
+            text="Cancel",
+            command=dialog.destroy,
+            font=('Arial', 10),
+            bg=self.colors['danger'],
+            fg='white',
+            bd=0,
+            padx=15,
+            pady=8,
+            cursor='hand2'
+        )
+        cancel_btn.pack(pady=10)
+        cancel_btn.bind('<Enter>', lambda e: cancel_btn.config(bg='#d90429'))
+        cancel_btn.bind('<Leave>', lambda e: cancel_btn.config(bg=self.colors['danger']))
     
     def generate_report(self):
         """Generate system report"""
-        messagebox.showinfo("Coming Soon", "Report generation feature coming soon!")
+        self.export_statistics_to_pdf()
     
     def forgot_password(self):
         """Handle forgot password"""
