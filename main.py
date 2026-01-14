@@ -1,4 +1,3 @@
-
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import sqlite3
@@ -21,19 +20,22 @@ class ModernLoginSystem:
     def __init__(self):
         # Colors for modern theme
         self.colors = {
-            'primary': '#4361ee',
-            'secondary': '#3a0ca3',
-            'accent': '#7209b7',
+            'primary': '#0056A6',  # SPC Blue
+            'secondary': '#FFD700',  # Gold
+            'accent': '#C8102E',  # Crimson
             'light': '#f8f9fa',
             'dark': '#212529',
-            'success': '#4cc9f0',
-            'danger': '#f72585',
-            'warning': '#f8961e',
-            'info': '#4895ef',
+            'success': '#28a745',
+            'danger': '#dc3545',
+            'warning': '#ffc107',
+            'info': '#17a2b8',
             'background': '#ffffff',
             'card_bg': '#f8f9fa',
             'text': '#2b2d42',
-            'transparent': '#ffffff00'
+            'transparent': '#ffffff00',
+            'navbar': '#0056A6',  # SPC Blue for navbar
+            'sidebar': '#1E3A5F',  # Dark blue for sidebar
+            'hover': '#2C5282'  # Sidebar hover
         }
         
         # Create attachments directory if it doesn't exist
@@ -42,19 +44,27 @@ class ModernLoginSystem:
             os.makedirs(self.attachments_dir)
         
         self.root = tk.Tk()
-        self.root.title("Student Records Management System")
-        self.root.geometry("1200x700")
+        self.root.title("St. Peter's College - Student Records Management System")
+        self.root.geometry("1400x800")
         self.root.configure(bg=self.colors['background'])
+        
+        # Sidebar state
+        self.sidebar_visible = True
+        self.sidebar_width = 250
         
         # Current user information
         self.current_user = None
         self.current_role = None
         
-        # Set window icon (optional)
+        # Try to load SPC logo
+        self.spc_logo = None
         try:
-            self.root.iconbitmap('icon.ico')
-        except:
-            pass
+            if os.path.exists('SPC.png'):
+                img = Image.open('SPC.png')
+                img = img.resize((180, 180), Image.Resampling.LANCZOS)
+                self.spc_logo = ImageTk.PhotoImage(img)
+        except Exception as e:
+            print(f"Could not load logo: {e}")
         
         # Initialize database
         self.init_database()
@@ -97,7 +107,6 @@ class ModernLoginSystem:
         ''')
         
         # Create credentials table (now for student records)
-        # UPDATED: Added all required columns including attachments and graduate-specific fields
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS credentials (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -181,50 +190,65 @@ class ModernLoginSystem:
         return hashlib.sha256(password.encode()).hexdigest()
     
     def create_login_screen(self):
-        """Create modern login screen"""
+        """Create modern login screen with SPC theme"""
         # Clear existing widgets
         for widget in self.root.winfo_children():
             widget.destroy()
         
-        # Main container
-        main_container = tk.Frame(self.root, bg=self.colors['background'])
+        # Main container with gradient background
+        main_container = tk.Frame(self.root, bg=self.colors['primary'])
         main_container.pack(fill=tk.BOTH, expand=True)
         
-        # Left panel with gradient
-        left_panel = tk.Frame(main_container, bg=self.colors['primary'], width=500)
+        # Left panel with SPC branding
+        left_panel = tk.Frame(main_container, bg=self.colors['primary'], width=600)
         left_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         left_panel.pack_propagate(False)
         
-        # Content on left panel
-        content_frame = tk.Frame(left_panel, bg=self.colors['primary'])
-        content_frame.place(relx=0.5, rely=0.5, anchor='center')
-
-        # App logo/name
-        app_name = tk.Label(
-            content_frame, 
-            text="ArchiveX", 
-            font=('Arial', 48, 'bold'),
-            fg='white',
-            bg=self.colors['primary']
-        )
-        app_name.pack(pady=(0, 10))
+        # SPC Logo and branding
+        branding_frame = tk.Frame(left_panel, bg=self.colors['primary'])
+        branding_frame.place(relx=0.5, rely=0.5, anchor='center')
         
-        app_tagline = tk.Label(
-            content_frame,
-            text="ST. PETERS COLLEGE",
-            font=('Arial', 14),
+        if self.spc_logo:
+            logo_label = tk.Label(branding_frame, image=self.spc_logo, bg=self.colors['primary'])
+            logo_label.pack(pady=(0, 20))
+        
+        # College name
+        college_name = tk.Label(
+            branding_frame,
+            text="ST. PETER'S COLLEGE",
+            font=('Arial', 32, 'bold'),
             fg='white',
             bg=self.colors['primary']
         )
-        app_tagline.pack()
+        college_name.pack(pady=(0, 10))
+        
+        # Tagline
+        tagline = tk.Label(
+            branding_frame,
+            text="Established 1952",
+            font=('Arial', 14, 'italic'),
+            fg=self.colors['secondary'],
+            bg=self.colors['primary']
+        )
+        tagline.pack(pady=(0, 5))
+        
+        # Location
+        location = tk.Label(
+            branding_frame,
+            text="Iligan City",
+            font=('Arial', 12),
+            fg='white',
+            bg=self.colors['primary']
+        )
+        location.pack()
         
         # Right panel - Login form
-        right_panel = tk.Frame(main_container, bg=self.colors['background'], width=600)
+        right_panel = tk.Frame(main_container, bg='white', width=600)
         right_panel.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
         right_panel.pack_propagate(False)
         
         # Login form container
-        form_container = tk.Frame(right_panel, bg=self.colors['background'], padx=80, pady=100)
+        form_container = tk.Frame(right_panel, bg='white', padx=80, pady=100)
         form_container.pack(expand=True, fill=tk.BOTH)
         
         # Welcome back text
@@ -232,17 +256,17 @@ class ModernLoginSystem:
             form_container,
             text="Welcome Back",
             font=('Arial', 32, 'bold'),
-            fg=self.colors['dark'],
-            bg=self.colors['background']
+            fg=self.colors['primary'],
+            bg='white'
         )
         welcome_label.pack(pady=(0, 10))
         
         subtitle_label = tk.Label(
             form_container,
-            text="Sign in to access your account",
+            text="Sign in to Student Records System",
             font=('Arial', 14),
             fg=self.colors['text'],
-            bg=self.colors['background']
+            bg='white'
         )
         subtitle_label.pack(pady=(0, 40))
         
@@ -252,10 +276,10 @@ class ModernLoginSystem:
             text="USERNAME",
             font=('Arial', 10, 'bold'),
             fg=self.colors['primary'],
-            bg=self.colors['background']
+            bg='white'
         ).pack(anchor='w', pady=(10, 5))
         
-        username_frame = tk.Frame(form_container, bg=self.colors['card_bg'], height=45)
+        username_frame = tk.Frame(form_container, bg=self.colors['light'], height=45, relief='solid', bd=1)
         username_frame.pack(fill=tk.X, pady=(0, 20))
         username_frame.pack_propagate(False)
         
@@ -264,7 +288,7 @@ class ModernLoginSystem:
             username_frame,
             text="👤",
             font=('Arial', 14),
-            bg=self.colors['card_bg']
+            bg=self.colors['light']
         )
         icon_label.pack(side=tk.LEFT, padx=15)
         
@@ -272,7 +296,7 @@ class ModernLoginSystem:
             username_frame,
             font=('Arial', 12),
             bd=0,
-            bg=self.colors['card_bg'],
+            bg=self.colors['light'],
             fg=self.colors['dark']
         )
         self.username_entry.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 15))
@@ -286,10 +310,10 @@ class ModernLoginSystem:
             text="PASSWORD",
             font=('Arial', 10, 'bold'),
             fg=self.colors['primary'],
-            bg=self.colors['background']
+            bg='white'
         ).pack(anchor='w', pady=(10, 5))
         
-        password_frame = tk.Frame(form_container, bg=self.colors['card_bg'], height=45)
+        password_frame = tk.Frame(form_container, bg=self.colors['light'], height=45, relief='solid', bd=1)
         password_frame.pack(fill=tk.X, pady=(0, 20))
         password_frame.pack_propagate(False)
         
@@ -298,7 +322,7 @@ class ModernLoginSystem:
             password_frame,
             text="🔒",
             font=('Arial', 14),
-            bg=self.colors['card_bg']
+            bg=self.colors['light']
         )
         icon_label.pack(side=tk.LEFT, padx=15)
         
@@ -306,7 +330,7 @@ class ModernLoginSystem:
             password_frame,
             font=('Arial', 12),
             bd=0,
-            bg=self.colors['card_bg'],
+            bg=self.colors['light'],
             fg=self.colors['dark'],
             show="•"
         )
@@ -324,7 +348,7 @@ class ModernLoginSystem:
             command=self.toggle_password_visibility,
             font=('Arial', 10),
             fg=self.colors['text'],
-            bg=self.colors['background'],
+            bg='white',
             selectcolor=self.colors['background'],
             activebackground=self.colors['background']
         )
@@ -341,10 +365,11 @@ class ModernLoginSystem:
             bd=0,
             padx=40,
             pady=12,
-            cursor='hand2'
+            cursor='hand2',
+            relief='raised'
         )
         self.login_button.pack(pady=(10, 20))
-        self.login_button.bind('<Enter>', lambda e: self.on_button_hover(e, self.colors['secondary']))
+        self.login_button.bind('<Enter>', lambda e: self.on_button_hover(e, self.colors['hover']))
         self.login_button.bind('<Leave>', lambda e: self.on_button_leave(e, self.colors['primary']))
         
         # Forgot password
@@ -353,7 +378,7 @@ class ModernLoginSystem:
             text="Forgot Password?",
             font=('Arial', 10, 'bold'),
             fg=self.colors['info'],
-            bg=self.colors['background'],
+            bg='white',
             cursor='hand2'
         )
         forgot_link.pack(pady=20)
@@ -367,14 +392,16 @@ class ModernLoginSystem:
     def on_entry_focus_in(self, frame):
         """Highlight entry field on focus"""
         frame.config(bg=self.colors['primary'])
+        frame.config(bd=2, relief='solid')
         for widget in frame.winfo_children():
             widget.config(bg=self.colors['primary'])
     
     def on_entry_focus_out(self, frame):
         """Remove highlight from entry field"""
-        frame.config(bg=self.colors['card_bg'])
+        frame.config(bg=self.colors['light'])
+        frame.config(bd=1, relief='solid')
         for widget in frame.winfo_children():
-            widget.config(bg=self.colors['card_bg'])
+            widget.config(bg=self.colors['light'])
     
     def on_button_hover(self, event, color):
         """Button hover effect"""
@@ -441,92 +468,159 @@ class ModernLoginSystem:
         self.dashboard_frame = tk.Frame(self.root, bg=self.colors['background'])
         self.dashboard_frame.pack(fill=tk.BOTH, expand=True)
         
-        # Top navbar
-        navbar = tk.Frame(self.dashboard_frame, bg='white', height=70)
+        # Top navbar (inspired by image.png)
+        navbar = tk.Frame(self.dashboard_frame, bg=self.colors['navbar'], height=70)
         navbar.pack(fill=tk.X)
         navbar.pack_propagate(False)
         
-        # App logo
+        # Left side - Hamburger menu for sidebar toggle
+        self.hamburger_btn = tk.Button(
+            navbar,
+            text="☰",
+            font=('Arial', 20),
+            bg=self.colors['navbar'],
+            fg='white',
+            bd=0,
+            command=self.toggle_sidebar,
+            cursor='hand2'
+        )
+        self.hamburger_btn.pack(side=tk.LEFT, padx=20)
+        
+        # Center - App title
         tk.Label(
             navbar,
-            text="Student Records System",
-            font=('Arial', 24, 'bold'),
-            fg=self.colors['primary'],
-            bg='white'
-        ).pack(side=tk.LEFT, padx=30)
-        
-        # User info on right
-        user_info_frame = tk.Frame(navbar, bg='white')
-        user_info_frame.pack(side=tk.RIGHT, padx=30)
-        
-        tk.Label(
-            user_info_frame,
-            text=full_name,
-            font=('Arial', 12, 'bold'),
-            fg=self.colors['dark'],
-            bg='white'
-        ).pack(side=tk.RIGHT, padx=(10, 0))
-        
-        # User avatar
-        avatar_label = tk.Label(
-            user_info_frame,
-            text="👤",
-            font=('Arial', 20),
-            bg=self.colors['primary'],
+            text="Student Records Management System",
+            font=('Arial', 20, 'bold'),
             fg='white',
-            width=3,
-            height=1
+            bg=self.colors['navbar']
+        ).pack(side=tk.LEFT, padx=10)
+        
+        # Right side - User info and quick links
+        user_info_frame = tk.Frame(navbar, bg=self.colors['navbar'])
+        user_info_frame.pack(side=tk.RIGHT, padx=20)
+        
+        # Quick links inspired by image.png
+        quick_links = []
+        for link in quick_links:
+            link_label = tk.Label(
+                user_info_frame,
+                text=link,
+                font=('Arial', 9, 'bold'),
+                fg='white',
+                bg=self.colors['navbar'],
+                cursor='hand2'
+            )
+            link_label.pack(side=tk.LEFT, padx=10)
+            link_label.bind('<Enter>', lambda e, l=link_label: l.config(fg=self.colors['secondary']))
+            link_label.bind('<Leave>', lambda e, l=link_label: l.config(fg='white'))
+        
+        # Separator
+        tk.Frame(user_info_frame, bg='white', width=1, height=20).pack(side=tk.LEFT, padx=10)
+        
+        # User avatar and name
+        avatar_frame = tk.Frame(user_info_frame, bg=self.colors['navbar'], cursor='hand2')
+        avatar_frame.pack(side=tk.LEFT, padx=10)
+        
+        avatar_label = tk.Label(
+            avatar_frame,
+            text="👤",
+            font=('Arial', 16),
+            bg=self.colors['navbar'],
+            fg='white'
         )
-        avatar_label.pack(side=tk.RIGHT)
+        avatar_label.pack(side=tk.LEFT)
+        
+        user_label = tk.Label(
+            avatar_frame,
+            text=full_name.split()[0],  # First name only
+            font=('Arial', 11, 'bold'),
+            fg='white',
+            bg=self.colors['navbar']
+        )
+        user_label.pack(side=tk.LEFT, padx=5)
         
         # Sidebar
-        sidebar = tk.Frame(self.dashboard_frame, bg='white', width=250)
-        sidebar.pack(side=tk.LEFT, fill=tk.Y)
-        sidebar.pack_propagate(False)
+        self.sidebar = tk.Frame(self.dashboard_frame, bg=self.colors['sidebar'], width=self.sidebar_width)
+        self.sidebar.pack(side=tk.LEFT, fill=tk.Y)
+        self.sidebar.pack_propagate(False)
+        
+        # Sidebar header with SPC logo
+        sidebar_header = tk.Frame(self.sidebar, bg=self.colors['sidebar'], height=150)
+        sidebar_header.pack(fill=tk.X)
+        sidebar_header.pack_propagate(False)
+        
+        if self.spc_logo:
+            # Resize logo for sidebar
+            small_logo = Image.open('SPC.png')
+            small_logo = small_logo.resize((80, 80), Image.Resampling.LANCZOS)
+            small_logo_tk = ImageTk.PhotoImage(small_logo)
+            logo_label = tk.Label(sidebar_header, image=small_logo_tk, bg=self.colors['sidebar'])
+            logo_label.image = small_logo_tk  # Keep reference
+            logo_label.pack(pady=10)
+        
+        tk.Label(
+            sidebar_header,
+            text="ST. PETER'S COLLEGE",
+            font=('Arial', 12, 'bold'),
+            fg='white',
+            bg=self.colors['sidebar']
+        ).pack()
+        
+        tk.Label(
+            sidebar_header,
+            text="Iligan City",
+            font=('Arial', 9),
+            fg=self.colors['secondary'],
+            bg=self.colors['sidebar']
+        ).pack()
         
         # Sidebar menu items
         self.menu_items = [
-            ("📊", "Dashboard", self.show_main_dashboard),
+            ("🏠", "Dashboard", self.show_main_dashboard),
             ("📋", "Student Records", self.show_credentials),  
+            ("📊", "Reports", self.generate_report),
             ("⚙️", "Settings", self.show_settings),
-            ("🆘", "Help & Support", self.show_help)
+            ("🆘", "Help & Support", self.show_help),
+            ("🚪", "Logout", self.logout)
         ]
         
-        tk.Frame(sidebar, bg=self.colors['light'], height=2).pack(fill=tk.X, pady=(20, 10))
-        
         for icon, text, command in self.menu_items:
-            item_frame = tk.Frame(sidebar, bg='white', height=50)
-            item_frame.pack(fill=tk.X, padx=20, pady=5)
+            item_frame = tk.Frame(self.sidebar, bg=self.colors['sidebar'], height=50)
+            item_frame.pack(fill=tk.X, padx=10, pady=2)
             item_frame.pack_propagate(False)
             
-            tk.Label(
+            icon_label = tk.Label(
                 item_frame,
                 text=icon,
-                font=('Arial', 14),
-                bg='white',
-                fg=self.colors['text']
-            ).pack(side=tk.LEFT, padx=(10, 15))
+                font=('Arial', 16),
+                bg=self.colors['sidebar'],
+                fg='white'
+            )
+            icon_label.pack(side=tk.LEFT, padx=15)
             
-            tk.Label(
+            text_label = tk.Label(
                 item_frame,
                 text=text,
                 font=('Arial', 12),
-                bg='white',
-                fg=self.colors['text']
-            ).pack(side=tk.LEFT)
+                bg=self.colors['sidebar'],
+                fg='white'
+            )
+            text_label.pack(side=tk.LEFT)
             
             # Make the entire frame clickable
             item_frame.bind('<Button-1>', lambda e, cmd=command: cmd())
-            for child in item_frame.winfo_children():
-                child.bind('<Button-1>', lambda e, cmd=command: cmd())
+            icon_label.bind('<Button-1>', lambda e, cmd=command: cmd())
+            text_label.bind('<Button-1>', lambda e, cmd=command: cmd())
             
             # Hover effect
-            item_frame.bind('<Enter>', lambda e, f=item_frame: f.config(bg=self.colors['light']))
-            item_frame.bind('<Leave>', lambda e, f=item_frame: f.config(bg='white'))
+            item_frame.bind('<Enter>', lambda e, f=item_frame: f.config(bg=self.colors['hover']))
+            item_frame.bind('<Leave>', lambda e, f=item_frame: f.config(bg=self.colors['sidebar']))
             
-            for child in item_frame.winfo_children():
-                child.bind('<Enter>', lambda e, f=item_frame: f.config(bg=self.colors['light']))
-                child.bind('<Leave>', lambda e, f=item_frame: f.config(bg='white'))
+            icon_label.bind('<Enter>', lambda e, f=item_frame: f.config(bg=self.colors['hover']))
+            icon_label.bind('<Leave>', lambda e, f=item_frame: f.config(bg=self.colors['sidebar']))
+            
+            text_label.bind('<Enter>', lambda e, f=item_frame: f.config(bg=self.colors['hover']))
+            text_label.bind('<Leave>', lambda e, f=item_frame: f.config(bg=self.colors['sidebar']))
         
         # Main content area
         self.main_content = tk.Frame(self.dashboard_frame, bg=self.colors['light'])
@@ -534,6 +628,17 @@ class ModernLoginSystem:
         
         # Show main dashboard by default
         self.show_main_dashboard(full_name, role, email)
+    
+    def toggle_sidebar(self):
+        """Toggle sidebar visibility"""
+        if self.sidebar_visible:
+            self.sidebar.pack_forget()
+            self.sidebar_visible = False
+            self.hamburger_btn.config(text="☰")
+        else:
+            self.sidebar.pack(side=tk.LEFT, fill=tk.Y)
+            self.sidebar_visible = True
+            self.hamburger_btn.config(text="✕")
     
     def show_main_dashboard(self, full_name=None, role=None, email=None):
         """Show main dashboard content"""
@@ -548,71 +653,239 @@ class ModernLoginSystem:
             if user_info:
                 full_name, role, email = user_info
         
-        # Welcome message
-        welcome_card = tk.Frame(self.main_content, bg='white')
+        # Create a canvas for scrolling
+        canvas = tk.Canvas(self.main_content, bg=self.colors['light'], highlightthickness=0)
+        scrollbar = ttk.Scrollbar(self.main_content, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas, bg=self.colors['light'])
+        
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        # Welcome message card
+        welcome_card = tk.Frame(scrollable_frame, bg='white', relief='solid', bd=1)
         welcome_card.pack(fill=tk.X, padx=30, pady=30)
         
+        # Header with SPC colors
+        welcome_header = tk.Frame(welcome_card, bg=self.colors['primary'], height=50)
+        welcome_header.pack(fill=tk.X)
+        welcome_header.pack_propagate(False)
+        
         tk.Label(
-            welcome_card,
+            welcome_header,
+            text="Dashboard Overview",
+            font=('Arial', 16, 'bold'),
+            fg='white',
+            bg=self.colors['primary']
+        ).pack(side=tk.LEFT, padx=20, pady=10)
+        
+        # Welcome content
+        content_frame = tk.Frame(welcome_card, bg='white', padx=20, pady=20)
+        content_frame.pack(fill=tk.BOTH, expand=True)
+        
+        tk.Label(
+            content_frame,
             text=f"Welcome back, {full_name}! 👋",
             font=('Arial', 24, 'bold'),
             fg=self.colors['dark'],
             bg='white'
-        ).pack(anchor='w', padx=30, pady=(30, 10))
+        ).pack(anchor='w', pady=(0, 10))
         
         tk.Label(
-            welcome_card,
+            content_frame,
             text=f"Role: {role.upper()} | Email: {email}",
             font=('Arial', 12),
             fg=self.colors['text'],
             bg='white'
-        ).pack(anchor='w', padx=30, pady=(0, 30))
+        ).pack(anchor='w', pady=(0, 20))
         
         # Statistics cards
-        stats_frame = tk.Frame(self.main_content, bg=self.colors['light'])
+        stats_frame = tk.Frame(scrollable_frame, bg=self.colors['light'])
         stats_frame.pack(fill=tk.X, padx=30, pady=(0, 30))
         
         # Get user's student records count
         self.cursor.execute('SELECT COUNT(*) FROM credentials WHERE owner_id = ?', (self.current_user,))
         cred_count = self.cursor.fetchone()[0]
         
+        # Get category distribution
+        self.cursor.execute('''SELECT category, COUNT(*) FROM credentials 
+                             WHERE owner_id = ? GROUP BY category''', (self.current_user,))
+        category_stats = self.cursor.fetchall()
+        
         stats_data = [
-            ("Student Records", str(cred_count), self.colors['primary'], "👨‍🎓"),
-            ("Active Sessions", "1", self.colors['success'], "👥"),
+            ("Total Students", str(cred_count), self.colors['primary'], "👨‍🎓"),
+            ("Graduates", str(sum(1 for cat, count in category_stats if cat == 'Graduate')), self.colors['success'], "🎓"),
+            ("Undergraduates", str(sum(1 for cat, count in category_stats if cat == 'Undergraduate')), self.colors['info'], "📚"),
+            ("Active Sessions", "1", self.colors['warning'], "👥"),
         ]
         
         for title, value, color, icon in stats_data:
-            card = tk.Frame(stats_frame, bg='white', width=200, height=120)
+            card = tk.Frame(stats_frame, bg='white', width=200, height=120, relief='solid', bd=1)
             card.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 20))
             card.pack_propagate(False)
             
-            tk.Label(
-                card,
-                text=icon,
-                font=('Arial', 24),
-                bg='white',
-                fg=color
-            ).pack(anchor='w', padx=20, pady=(20, 5))
+            # Card header
+            card_header = tk.Frame(card, bg=color, height=30)
+            card_header.pack(fill=tk.X)
+            card_header.pack_propagate(False)
             
+            tk.Label(
+                card_header,
+                text=icon,
+                font=('Arial', 14),
+                bg=color,
+                fg='white'
+            ).pack(side=tk.LEFT, padx=10)
+            
+            tk.Label(
+                card_header,
+                text=title,
+                font=('Arial', 10, 'bold'),
+                bg=color,
+                fg='white'
+            ).pack(side=tk.LEFT)
+            
+            # Card content
             tk.Label(
                 card,
                 text=value,
                 font=('Arial', 28, 'bold'),
                 bg='white',
                 fg=self.colors['dark']
-            ).pack(anchor='w', padx=20)
+            ).pack(expand=True)
             
             tk.Label(
                 card,
-                text=title,
+                text="Records",
                 font=('Arial', 10),
                 bg='white',
                 fg=self.colors['text']
-            ).pack(anchor='w', padx=20, pady=(0, 20))
+            ).pack(pady=(0, 15))
+        
+        # Recent activity section
+        activity_frame = tk.Frame(scrollable_frame, bg='white', relief='solid', bd=1)
+        activity_frame.pack(fill=tk.BOTH, expand=True, padx=30, pady=(0, 30))
+        
+        # Activity header
+        activity_header = tk.Frame(activity_frame, bg=self.colors['primary'], height=40)
+        activity_header.pack(fill=tk.X)
+        activity_header.pack_propagate(False)
+        
+        tk.Label(
+            activity_header,
+            text="📈 Recent Activity",
+            font=('Arial', 14, 'bold'),
+            fg='white',
+            bg=self.colors['primary']
+        ).pack(side=tk.LEFT, padx=20, pady=8)
+        
+        # Activity content
+        activity_content = tk.Frame(activity_frame, bg='white', padx=20, pady=20)
+        activity_content.pack(fill=tk.BOTH, expand=True)
+        
+        # Get recent student records
+        self.cursor.execute('''SELECT first_name, last_name, category, updated_at 
+                             FROM credentials WHERE owner_id = ? 
+                             ORDER BY updated_at DESC LIMIT 5''', (self.current_user,))
+        recent_students = self.cursor.fetchall()
+        
+        if recent_students:
+            for i, (fname, lname, category, updated) in enumerate(recent_students):
+                row_frame = tk.Frame(activity_content, bg='white')
+                row_frame.pack(fill=tk.X, pady=5)
+                
+                tk.Label(
+                    row_frame,
+                    text=f"👤 {fname} {lname}",
+                    font=('Arial', 11),
+                    bg='white',
+                    fg=self.colors['dark'],
+                    anchor='w'
+                ).pack(side=tk.LEFT, padx=10)
+                
+                tk.Label(
+                    row_frame,
+                    text=f"({category})",
+                    font=('Arial', 10),
+                    bg='white',
+                    fg=self.colors['text'],
+                    anchor='w'
+                ).pack(side=tk.LEFT, padx=10)
+                
+                tk.Label(
+                    row_frame,
+                    text=f"Updated: {updated[:10] if updated else 'N/A'}",
+                    font=('Arial', 9),
+                    bg='white',
+                    fg=self.colors['text'],
+                    anchor='w'
+                ).pack(side=tk.RIGHT, padx=10)
+        else:
+            tk.Label(
+                activity_content,
+                text="No recent activity",
+                font=('Arial', 12),
+                bg='white',
+                fg=self.colors['text']
+            ).pack(pady=20)
+        
+        # Quick actions
+        quick_actions_frame = tk.Frame(scrollable_frame, bg=self.colors['light'])
+        quick_actions_frame.pack(fill=tk.X, padx=30, pady=(0, 30))
+        
+        tk.Label(
+            quick_actions_frame,
+            text="⚡ Quick Actions",
+            font=('Arial', 16, 'bold'),
+            bg=self.colors['light'],
+            fg=self.colors['dark']
+        ).pack(anchor='w', pady=(0, 15))
+        
+        action_buttons = [
+            ("➕ Add New Student", self.add_new_credential, self.colors['primary']),
+            ("📤 Export Records", self.export_options, self.colors['success']),
+            ("📊 Generate Report", self.generate_report, self.colors['info']),
+            ("⚙️ System Settings", self.show_settings, self.colors['warning'])
+        ]
+        
+        for btn_text, command, color in action_buttons:
+            btn = tk.Button(
+                quick_actions_frame,
+                text=btn_text,
+                command=command,
+                font=('Arial', 11),
+                bg=color,
+                fg='white',
+                bd=0,
+                padx=20,
+                pady=10,
+                cursor='hand2',
+                relief='raised'
+            )
+            btn.pack(side=tk.LEFT, padx=(0, 15))
+            btn.bind('<Enter>', lambda e, b=btn, c=color: b.config(bg=self.darken_color(c)))
+            btn.bind('<Leave>', lambda e, b=btn, c=color: b.config(bg=c))
+        
+        # Footer
+        footer_frame = tk.Frame(scrollable_frame, bg=self.colors['light'], height=50)
+        footer_frame.pack(fill=tk.X, padx=30, pady=(0, 20))
+        footer_frame.pack_propagate(False)
+        
+        tk.Label(
+            footer_frame,
+            text="© 2024 St. Peter's College - Student Records Management System",
+            font=('Arial', 9),
+            bg=self.colors['light'],
+            fg=self.colors['text']
+        ).pack(side=tk.LEFT)
         
         # Logout button at bottom
         logout_btn = tk.Button(
-            self.main_content,
+            footer_frame,
             text="🚪 Logout",
             command=self.logout,
             font=('Arial', 10),
@@ -623,9 +896,32 @@ class ModernLoginSystem:
             pady=8,
             cursor='hand2'
         )
-        logout_btn.pack(side=tk.RIGHT, padx=30, pady=20)
+        logout_btn.pack(side=tk.RIGHT)
         logout_btn.bind('<Enter>', lambda e: logout_btn.config(bg='#d90429'))
         logout_btn.bind('<Leave>', lambda e: logout_btn.config(bg=self.colors['danger']))
+        
+        # Pack canvas and scrollbar
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        # Bind mouse wheel to scroll
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+    
+    def darken_color(self, color):
+        """Darken color for hover effect"""
+        if color == self.colors['primary']:
+            return '#004080'
+        elif color == self.colors['success']:
+            return '#218838'
+        elif color == self.colors['info']:
+            return '#138496'
+        elif color == self.colors['warning']:
+            return '#e0a800'
+        else:
+            return color
     
     def show_credentials(self):
         """Show student records management screen"""
@@ -684,7 +980,7 @@ class ModernLoginSystem:
         filter_frame.pack(fill=tk.X, padx=30, pady=(0, 20))
         
         # Search box
-        search_frame = tk.Frame(filter_frame, bg='white', height=40)
+        search_frame = tk.Frame(filter_frame, bg='white', height=40, relief='solid', bd=1)
         search_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
         search_frame.pack_propagate(False)
         
@@ -768,6 +1064,10 @@ class ModernLoginSystem:
         self.cred_tree.column('Attachments', width=150)
         self.cred_tree.column('Last Updated', width=150)
         
+        # Style the treeview
+        style = ttk.Style()
+        style.configure("Treeview.Heading", font=('Arial', 10, 'bold'), background=self.colors['primary'], foreground='white')
+        
         # Add scrollbar to treeview
         tree_scrollbar = ttk.Scrollbar(list_frame, orient='vertical', command=self.cred_tree.yview)
         self.cred_tree.configure(yscrollcommand=tree_scrollbar.set)
@@ -785,7 +1085,7 @@ class ModernLoginSystem:
             ("✏️ Edit", self.edit_credential),
             ("🗑️ Delete", self.delete_credential),
             ("📁 Open Attachments", self.open_attachments),
-            ("📤 Export", self.export_options)  # Changed to show export options
+            ("📤 Export", self.export_options)
         ]
         
         for btn_text, command in action_buttons:
@@ -1002,7 +1302,7 @@ class ModernLoginSystem:
                 'CustomTitle',
                 parent=styles['Heading1'],
                 fontSize=20,
-                textColor=colors.HexColor('#4361ee'),
+                textColor=colors.HexColor('#0056A6'),  # SPC Blue
                 spaceAfter=30
             )
             
@@ -1043,7 +1343,7 @@ class ModernLoginSystem:
             
             # Style the table
             table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4361ee')),
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0056A6')),  # SPC Blue
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
@@ -1137,7 +1437,7 @@ class ModernLoginSystem:
                 'CustomTitle',
                 parent=styles['Heading1'],
                 fontSize=20,
-                textColor=colors.HexColor('#4361ee'),
+                textColor=colors.HexColor('#0056A6'),  # SPC Blue
                 spaceAfter=30
             )
             
@@ -1182,7 +1482,7 @@ class ModernLoginSystem:
             
             info_table = Table(info_data, colWidths=[2*inch, 4*inch])
             info_table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4361ee')),
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0056A6')),  # SPC Blue
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
                 ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
@@ -1267,7 +1567,7 @@ class ModernLoginSystem:
                 'CustomTitle',
                 parent=styles['Heading1'],
                 fontSize=20,
-                textColor=colors.HexColor('#4361ee'),
+                textColor=colors.HexColor('#0056A6'),  # SPC Blue
                 spaceAfter=30
             )
             
@@ -1321,7 +1621,7 @@ class ModernLoginSystem:
                 
                 cat_table = Table(cat_data, colWidths=[2*inch, 1.5*inch, 1.5*inch])
                 cat_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4361ee')),
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0056A6')),  # SPC Blue
                     ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
                     ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                     ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
@@ -1354,7 +1654,7 @@ class ModernLoginSystem:
                 
                 month_table = Table(month_data, colWidths=[2*inch, 2*inch])
                 month_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#7209b7')),
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#C8102E')),  # SPC Crimson
                     ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
                     ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                     ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
@@ -1446,7 +1746,7 @@ class ModernLoginSystem:
                 'CustomTitle',
                 parent=styles['Heading1'],
                 fontSize=20,
-                textColor=colors.HexColor('#4361ee'),
+                textColor=colors.HexColor('#0056A6'),  # SPC Blue
                 spaceAfter=30
             )
             
