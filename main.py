@@ -80,8 +80,17 @@ class ModernLoginSystem:
         # Center the window
         self.center_window()
         
+        # Bind resize event
+        self.root.bind('<Configure>', self.on_window_resize)
+        
         # Run the application
         self.root.mainloop()
+    
+    def on_window_resize(self, event=None):
+        """Handle window resize to adjust layout"""
+        if hasattr(self, 'main_content'):
+            # Update content area to fill available space
+            self.main_content.update_idletasks()
     
     def center_window(self):
         """Center the window on screen"""
@@ -463,7 +472,7 @@ class ModernLoginSystem:
             self.login_button.config(text="SIGN IN", state='normal')
             messagebox.showerror("Access Denied", "Invalid username or password")
     
-    def show_dashboard(self, full_name, role, email):
+    def show_dashboard(self, full_name=None, role=None, email=None):
         """Show modern dashboard after successful login"""
         # Clear existing widgets
         for widget in self.root.winfo_children():
@@ -638,8 +647,9 @@ class ModernLoginSystem:
             self.hamburger_btn.config(text="✕")
             self.sidebar_visible = True
         
-        # Update layout
+        # Update layout to stretch content
         self.main_frame.update_idletasks()
+        self.root.update_idletasks()
     
     def show_main_dashboard(self, full_name=None, role=None, email=None):
         """Show main dashboard content"""
@@ -648,41 +658,29 @@ class ModernLoginSystem:
             if widget != self.navbar:
                 widget.destroy()
         
-        # -------------------- SCROLLABLE DASHBOARD (CENTERED) --------------------
-        dashboard_container = tk.Frame(self.main_content, bg="white")
-        dashboard_container.pack(fill="both", expand=True)
+        # Create a container that fills available space
+        dashboard_container = tk.Frame(self.main_content, bg=self.colors['light'])
+        dashboard_container.pack(fill=tk.BOTH, expand=True)
         
-        canvas = tk.Canvas(dashboard_container, bg="white", highlightthickness=0)
-        canvas.pack(side="left", fill="both", expand=True)
-        
+        # Create a canvas with responsive width
+        canvas = tk.Canvas(dashboard_container, bg=self.colors['light'], highlightthickness=0)
         scrollbar = ttk.Scrollbar(dashboard_container, orient="vertical", command=canvas.yview)
-        scrollbar.pack(side="right", fill="y")
+        scrollable_frame = tk.Frame(canvas, bg=self.colors['light'])
         
+        def configure_scrollregion(event=None):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+            # Update canvas width to match container
+            canvas_width = dashboard_container.winfo_width()
+            if canvas_width > 1:
+                canvas.itemconfig(canvas_window, width=canvas_width)
+        
+        scrollable_frame.bind("<Configure>", configure_scrollregion)
+        
+        canvas_window = canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
         
-        # Frame inside the canvas
-        scrollable_frame = tk.Frame(canvas, bg="white")
-        
-        # ✅ IMPORTANT: anchor="n" not "nw" (this allows centering)
-        window_id = canvas.create_window((0, 0), window=scrollable_frame, anchor="n")
-        
-        # Update scrollregion whenever content size changes
-        def update_scrollregion(event=None):
-            canvas.configure(scrollregion=canvas.bbox("all"))
-        
-        scrollable_frame.bind("<Configure>", update_scrollregion)
-        
-        # ✅ CENTER CONTENT when canvas resizes (sidebar hide/show triggers this)
-        def center_scrollable_content(event=None):
-            canvas_width = canvas.winfo_width()
-        
-            # make the scrollable frame match canvas width
-            canvas.itemconfig(window_id, width=canvas_width)
-        
-            # move the window to center
-            canvas.coords(window_id, canvas_width // 2, 0)
-        
-        canvas.bind("<Configure>", center_scrollable_content)
+        # Also configure on container resize
+        dashboard_container.bind("<Configure>", lambda e: configure_scrollregion())
         
         if not full_name:
             # Get user info from database
@@ -907,6 +905,10 @@ class ModernLoginSystem:
             fg=self.colors['text']
         ).pack(side=tk.LEFT)
         
+        # Pack canvas and scrollbar
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
         # Bind mouse wheel to scroll (with proper cleanup)
         def _on_mousewheel(event):
             if canvas.winfo_exists():
@@ -916,15 +918,8 @@ class ModernLoginSystem:
         bind_id = canvas.bind_all("<MouseWheel>", _on_mousewheel)
         self.canvas_bindings.append((canvas, bind_id))
         
-        # Clean up function when switching views
-        def cleanup():
-            try:
-                canvas.unbind_all("<MouseWheel>")
-            except:
-                pass
-        
-        # Store cleanup reference
-        self.current_cleanup = cleanup
+        # Update immediately
+        configure_scrollregion()
     
     def darken_color(self, color):
         """Darken color for hover effect"""
@@ -946,22 +941,29 @@ class ModernLoginSystem:
             if widget != self.navbar:
                 widget.destroy()
         
-        # Create a centered container
+        # Create a container that fills available space
         main_container = tk.Frame(self.main_content, bg=self.colors['light'])
         main_container.pack(fill=tk.BOTH, expand=True)
         
-        # Create a canvas for scrolling
+        # Create a canvas with responsive width
         canvas = tk.Canvas(main_container, bg=self.colors['light'], highlightthickness=0)
         scrollbar = ttk.Scrollbar(main_container, orient="vertical", command=canvas.yview)
         scrollable_frame = tk.Frame(canvas, bg=self.colors['light'])
         
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
+        def configure_scrollregion(event=None):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+            # Update canvas width to match container
+            canvas_width = main_container.winfo_width()
+            if canvas_width > 1:
+                canvas.itemconfig(canvas_window, width=canvas_width)
         
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        scrollable_frame.bind("<Configure>", configure_scrollregion)
+        
+        canvas_window = canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
+        
+        # Also configure on container resize
+        main_container.bind("<Configure>", lambda e: configure_scrollregion())
         
         # Student records header
         header_frame = tk.Frame(scrollable_frame, bg=self.colors['light'])
@@ -1082,7 +1084,7 @@ class ModernLoginSystem:
         
         # Style the treeview
         style = ttk.Style()
-        style.configure("Treeview.Heading", font=('Arial', 10, 'bold'), background=self.colors['primary'], foreground='white')
+        style.configure("Treeview.Heading", font=('Arial', 10, 'bold'), background=self.colors['primary'], foreground='black')
         
         # Add scrollbar to treeview
         tree_scrollbar = ttk.Scrollbar(list_frame, orient='vertical', command=self.cred_tree.yview)
@@ -1156,6 +1158,9 @@ class ModernLoginSystem:
         
         # Bind double click to view record
         self.cred_tree.bind('<Double-1>', lambda e: self.view_credential())
+        
+        # Update immediately
+        configure_scrollregion()
     
     def load_credentials(self, search_text="", category="All"):
         """Load student records from database"""
@@ -1899,26 +1904,26 @@ class ModernLoginSystem:
         y = (self.root.winfo_screenheight() // 2) - (750 // 2)
         dialog.geometry(f'500x750+{x}+{y}')
         
-        # Create a scrollable frame for the dialog
+        # Create a scrollable canvas with responsive width
         canvas = tk.Canvas(dialog, bg=self.colors['background'])
         scrollbar = ttk.Scrollbar(dialog, orient="vertical", command=canvas.yview)
         scrollable_frame = tk.Frame(canvas, bg=self.colors['background'])
         
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
+        def configure_scrollregion(event=None):
+            if canvas.winfo_exists():
+                canvas.configure(scrollregion=canvas.bbox("all"))
+                # Update canvas width
+                canvas_width = dialog.winfo_width()
+                if canvas_width > 1:
+                    canvas.itemconfig(window_id, width=canvas_width)
+        
+        scrollable_frame.bind("<Configure>", configure_scrollregion)
         
         window_id = canvas.create_window((0, 0), window=scrollable_frame, anchor="n")
         canvas.configure(yscrollcommand=scrollbar.set)
-
-        def center_scrollable_content(event=None):
-            if canvas.winfo_exists():
-                canvas_width = canvas.winfo_width()
-                canvas.itemconfig(window_id, width=canvas_width)
-                canvas.coords(window_id, canvas_width // 2, 0)
-
-        canvas.bind("<Configure>", center_scrollable_content)
+        
+        # Bind dialog resize
+        dialog.bind("<Configure>", configure_scrollregion)
         
         # Title - CENTERED
         tk.Label(
@@ -2274,6 +2279,9 @@ class ModernLoginSystem:
         # Pack canvas and scrollbar
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
+        
+        # Update immediately
+        configure_scrollregion()
     
     def edit_credential(self):
         """Edit selected student record"""
@@ -2319,26 +2327,26 @@ class ModernLoginSystem:
         y = (self.root.winfo_screenheight() // 2) - (750 // 2)
         dialog.geometry(f'500x750+{x}+{y}')
         
-        # Create a scrollable frame for the dialog
+        # Create a scrollable canvas with responsive width
         canvas = tk.Canvas(dialog, bg=self.colors['background'])
         scrollbar = ttk.Scrollbar(dialog, orient="vertical", command=canvas.yview)
         scrollable_frame = tk.Frame(canvas, bg=self.colors['background'])
         
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
+        def configure_scrollregion(event=None):
+            if canvas.winfo_exists():
+                canvas.configure(scrollregion=canvas.bbox("all"))
+                # Update canvas width
+                canvas_width = dialog.winfo_width()
+                if canvas_width > 1:
+                    canvas.itemconfig(window_id, width=canvas_width)
+        
+        scrollable_frame.bind("<Configure>", configure_scrollregion)
         
         window_id = canvas.create_window((0, 0), window=scrollable_frame, anchor="n")
         canvas.configure(yscrollcommand=scrollbar.set)
-
-        def center_scrollable_content(event=None):
-            if canvas.winfo_exists():
-                canvas_width = canvas.winfo_width()
-                canvas.itemconfig(window_id, width=canvas_width)
-                canvas.coords(window_id, canvas_width // 2, 0)
-
-        canvas.bind("<Configure>", center_scrollable_content)
+        
+        # Bind dialog resize
+        dialog.bind("<Configure>", configure_scrollregion)
         
         # Title - CENTERED
         tk.Label(
@@ -2725,6 +2733,9 @@ class ModernLoginSystem:
         # Pack canvas and scrollbar
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
+        
+        # Update immediately
+        configure_scrollregion()
     
     def view_credential(self):
         """View selected student record details with image display"""
@@ -2771,18 +2782,26 @@ class ModernLoginSystem:
         y = (self.root.winfo_screenheight() // 2) - (750 // 2)
         dialog.geometry(f'800x750+{x}+{y}')
         
-        # Create a scrollable canvas
+        # Create a scrollable canvas with responsive width
         canvas = tk.Canvas(dialog, bg=self.colors['background'])
         scrollbar = ttk.Scrollbar(dialog, orient="vertical", command=canvas.yview)
         scrollable_frame = tk.Frame(canvas, bg=self.colors['background'])
         
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
+        def configure_scrollregion(event=None):
+            if canvas.winfo_exists():
+                canvas.configure(scrollregion=canvas.bbox("all"))
+                # Update canvas width
+                canvas_width = dialog.winfo_width()
+                if canvas_width > 1:
+                    canvas.itemconfig(canvas_window, width=canvas_width)
         
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        scrollable_frame.bind("<Configure>", configure_scrollregion)
+        
+        canvas_window = canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
+        
+        # Bind dialog resize
+        dialog.bind("<Configure>", configure_scrollregion)
         
         # Title - CENTERED
         tk.Label(
@@ -3034,6 +3053,9 @@ class ModernLoginSystem:
                     self.canvas_bindings.remove((canvas_obj, bind_id))
         
         dialog.protocol("WM_DELETE_WINDOW", on_dialog_close)
+        
+        # Update immediately
+        configure_scrollregion()
     
     def open_file(self, filepath):
         """Open a file using the default system application"""
@@ -3185,7 +3207,7 @@ class ModernLoginSystem:
         create_settings_button("Theme Settings", "🎨", self.show_theme_settings)
         create_settings_button("Change Password", "🔐", self.change_password)
         create_settings_button("Back to Dashboard", "⬅", self.show_main_dashboard)
-    
+
     # ==========================================================
     # 1) USER MANAGEMENT BUTTON FUNCTION
     # ==========================================================
@@ -3231,7 +3253,7 @@ class ModernLoginSystem:
             pady=12,
             cursor="hand2"
         ).pack()
-    
+
     # ==========================================================
     # 2) DATABASE BACKUP BUTTON FUNCTION (REAL BACKUP)
     # ==========================================================
@@ -3264,7 +3286,7 @@ class ModernLoginSystem:
 
         except Exception as e:
             messagebox.showerror("Backup Error", f"Failed to backup database:\n\n{e}")
-    
+
     # ==========================================================
     # 3) THEME SETTINGS BUTTON FUNCTION (WORKING)
     # ==========================================================
@@ -3381,7 +3403,7 @@ class ModernLoginSystem:
             if widget != self.navbar:
                 widget.destroy()
         
-        # Create a centered container
+        # Create a container that fills available space
         container = tk.Frame(self.main_content, bg=self.colors['light'])
         container.pack(fill=tk.BOTH, expand=True, padx=30, pady=30)
         
@@ -3429,12 +3451,6 @@ class ModernLoginSystem:
            • All passwords are securely hashed
            • Role-based access control
            • Session management
-        
-        6. ⚙️ Settings
-           • User Management
-           • Database Backup
-           • Theme Settings (Default, Dark Mode, Blue Theme)
-           • Change Password
         
         For additional support, contact the system administrator.
         """
