@@ -5,6 +5,7 @@ import hashlib
 import os
 import sys
 import json
+import subprocess
 import shutil
 from datetime import datetime
 from PIL import Image, ImageTk
@@ -21,7 +22,7 @@ class ModernLoginSystem:
         # Colors for modern theme - Maroon & Gold
         self.colors = {
             'primary': '#800000',  # Maroon
-            'secondary': '#FFD700',  # Gold
+            'secondary': "#D12C26",  # Gold
             'accent': '#C41E3A',  # Crimson
             'light': '#f8f9fa',
             'dark': '#212529',
@@ -37,7 +38,7 @@ class ModernLoginSystem:
             'sidebar': '#5a0019',  # Dark maroon for sidebar
             'hover': '#9a031e',  # Sidebar hover
             'sidebar_text': '#ffffff',
-            'active_item': '#9a031e'
+            'active_item': '#9a031e'  # Active menu item color
         }
         
         # Create attachments directory if it doesn't exist
@@ -60,6 +61,10 @@ class ModernLoginSystem:
         
         # Store mouse wheel bindings
         self.canvas_bindings = []
+        
+        # Store menu item references
+        self.menu_item_frames = []
+        self.current_active_menu = None  # Track active menu item
         
         # Try to load SPC logo
         self.spc_logo = None
@@ -141,6 +146,7 @@ class ModernLoginSystem:
                 so_number TEXT,
                 date_issued TEXT,
                 series_year TEXT,
+                lrn TEXT,  -- ✅ ADDED LRN FIELD FOR GRADUATES
                 FOREIGN KEY (owner_id) REFERENCES users (id)
             )
         ''')
@@ -157,7 +163,7 @@ class ModernLoginSystem:
         columns_to_check = [
             'first_name', 'middle_name', 'last_name',
             'last_school_year', 'contact_number', 'so_number', 
-            'date_issued', 'series_year'
+            'date_issued', 'series_year', 'lrn'  # ✅ ADDED LRN TO CHECK
         ]
         for column in columns_to_check:
             try:
@@ -183,15 +189,15 @@ class ModernLoginSystem:
             # Add some sample student records for admin
             admin_id = self.cursor.lastrowid
             sample_students = [
-                ('John Smith (S001)', 'S001', 'John', '[]', 'Active', 'John', '', 'Smith', admin_id, '', '', '', '', ''),
-                ('Jane Doe (S002)', 'S002', 'Jane', '[]', 'Active', 'Jane', '', 'Doe', admin_id, '', '', '', '', ''),
-                ('Robert Johnson (S003)', 'S003', 'Robert', '[]', 'Graduate', 'Robert', 'James', 'Johnson', admin_id, '', '', '', '', ''),
+                ('John Smith (S001)', 'S001', 'John', '[]', 'Active', 'John', '', 'Smith', admin_id, '', '', '', '', '', ''),
+                ('Jane Doe (S002)', 'S002', 'Jane', '[]', 'Active', 'Jane', '', 'Doe', admin_id, '', '', '', '', '', ''),
+                ('Robert Johnson (S003)', 'S003', 'Robert', '[]', 'Graduate', 'Robert', 'James', 'Johnson', admin_id, '2022-2023', '09123456789', 'SO-12345', '2023-04-15', '2023', '123456789012'),
             ]
             
             for student in sample_students:
                 self.cursor.execute('''
-                    INSERT INTO credentials (title, username, password, attachments, category, first_name, middle_name, last_name, owner_id, last_school_year, contact_number, so_number, date_issued, series_year)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO credentials (title, username, password, attachments, category, first_name, middle_name, last_name, owner_id, last_school_year, contact_number, so_number, date_issued, series_year, lrn)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', student)
             
             self.conn.commit()
@@ -268,7 +274,7 @@ class ModernLoginSystem:
         # Welcome back text
         welcome_label = tk.Label(
             form_container,
-            text="Welcome Back",
+            text="Welcome!",
             font=('Arial', 32, 'bold'),
             fg=self.colors['primary'],
             bg='white'
@@ -472,6 +478,34 @@ class ModernLoginSystem:
             self.login_button.config(text="SIGN IN", state='normal')
             messagebox.showerror("Access Denied", "Invalid username or password")
     
+    def set_active_menu(self, menu_index):
+        """Set active menu item and highlight it"""
+        # Reset all menu items to sidebar color
+        for i, item_frame in enumerate(self.menu_item_frames):
+            # Reset frame to sidebar color
+            item_frame.config(bg=self.colors['sidebar'])
+            
+            # Reset all widgets inside the frame
+            for widget in item_frame.winfo_children():
+                widget.config(bg=self.colors['sidebar'])
+                
+                # Reset text color to sidebar text color
+                if isinstance(widget, tk.Label):
+                    widget.config(fg=self.colors['sidebar_text'])
+        
+        # Highlight the active menu item
+        if 0 <= menu_index < len(self.menu_item_frames):
+            active_frame = self.menu_item_frames[menu_index]
+            active_frame.config(bg=self.colors['active_item'])
+            
+            # Update all widgets inside the active frame
+            for widget in active_frame.winfo_children():
+                widget.config(bg=self.colors['active_item'])
+                if isinstance(widget, tk.Label):
+                    widget.config(fg='white')  # White text for active item
+            
+            self.current_active_menu = menu_index
+    
     def show_dashboard(self, full_name=None, role=None, email=None):
         """Show modern dashboard after successful login"""
         # Clear existing widgets
@@ -531,9 +565,38 @@ class ModernLoginSystem:
             ("🚪", "Logout", self.logout)
         ]
         
-        self.menu_frames = []
+        self.menu_item_frames = []  # Clear previous references
         
-        for icon, text, command in self.menu_items:
+        # Helper function for hover effect
+        def apply_hover_effect(event, frame, is_enter=True):
+            # Check if this frame is the current active menu item
+            frame_index = None
+            for idx, item_frame in enumerate(self.menu_item_frames):
+                if item_frame == frame:
+                    frame_index = idx
+                    break
+            
+            # If this is the active menu item, don't change colors
+            if frame_index is not None and frame_index == self.current_active_menu:
+                return
+            
+            # For non-active items
+            if is_enter:
+                # Mouse entering - change to hover color
+                frame.config(bg=self.colors['hover'])
+                for widget in frame.winfo_children():
+                    widget.config(bg=self.colors['hover'])
+                    if isinstance(widget, tk.Label):
+                        widget.config(fg='white')  # White text on hover
+            else:
+                # Mouse leaving - return to sidebar color
+                frame.config(bg=self.colors['sidebar'])
+                for widget in frame.winfo_children():
+                    widget.config(bg=self.colors['sidebar'])
+                    if isinstance(widget, tk.Label):
+                        widget.config(fg=self.colors['sidebar_text'])  # Original text color
+
+        for idx, (icon, text, command) in enumerate(self.menu_items):
             item_frame = tk.Frame(self.sidebar, bg=self.colors['sidebar'], height=50)
             item_frame.pack(fill=tk.X, padx=10, pady=2)
             item_frame.pack_propagate(False)
@@ -557,21 +620,27 @@ class ModernLoginSystem:
             text_label.pack(side=tk.LEFT)
             
             # Make the entire frame clickable
-            item_frame.bind('<Button-1>', lambda e, cmd=command: cmd())
-            icon_label.bind('<Button-1>', lambda e, cmd=command: cmd())
-            text_label.bind('<Button-1>', lambda e, cmd=command: cmd())
+            def make_command(idx, cmd):
+                def wrapped():
+                    self.set_active_menu(idx)
+                    cmd()
+                return wrapped
+            
+            item_frame.bind('<Button-1>', lambda e, idx=idx, cmd=command: make_command(idx, cmd)())
+            icon_label.bind('<Button-1>', lambda e, idx=idx, cmd=command: make_command(idx, cmd)())
+            text_label.bind('<Button-1>', lambda e, idx=idx, cmd=command: make_command(idx, cmd)())
             
             # Hover effect
-            item_frame.bind('<Enter>', lambda e, f=item_frame: f.config(bg=self.colors['hover']))
-            item_frame.bind('<Leave>', lambda e, f=item_frame: f.config(bg=self.colors['sidebar']))
+            item_frame.bind('<Enter>', lambda e, f=item_frame: apply_hover_effect(e, f, True))
+            item_frame.bind('<Leave>', lambda e, f=item_frame: apply_hover_effect(e, f, False))
             
-            icon_label.bind('<Enter>', lambda e, f=item_frame: f.config(bg=self.colors['hover']))
-            icon_label.bind('<Leave>', lambda e, f=item_frame: f.config(bg=self.colors['sidebar']))
+            icon_label.bind('<Enter>', lambda e, f=item_frame: apply_hover_effect(e, f, True))
+            icon_label.bind('<Leave>', lambda e, f=item_frame: apply_hover_effect(e, f, False))
             
-            text_label.bind('<Enter>', lambda e, f=item_frame: f.config(bg=self.colors['hover']))
-            text_label.bind('<Leave>', lambda e, f=item_frame: f.config(bg=self.colors['sidebar']))
+            text_label.bind('<Enter>', lambda e, f=item_frame: apply_hover_effect(e, f, True))
+            text_label.bind('<Leave>', lambda e, f=item_frame: apply_hover_effect(e, f, False))
             
-            self.menu_frames.append(item_frame)
+            self.menu_item_frames.append(item_frame)
         
         # Main content area
         self.main_content = tk.Frame(self.main_frame, bg=self.colors['light'])
@@ -631,8 +700,9 @@ class ModernLoginSystem:
         )
         user_label.pack(side=tk.LEFT, padx=5)
         
-        # Show main dashboard by default
+        # Show main dashboard by default and set active menu
         self.show_main_dashboard(full_name, role, email)
+        self.set_active_menu(0)  # Set Dashboard as active
     
     def toggle_sidebar(self):
         """Toggle sidebar visibility with smooth animation"""
@@ -653,6 +723,9 @@ class ModernLoginSystem:
     
     def show_main_dashboard(self, full_name=None, role=None, email=None):
         """Show main dashboard content"""
+        # Set active menu to Dashboard
+        self.set_active_menu(0)
+        
         # Clear main content (except navbar)
         for widget in self.main_content.winfo_children():
             if widget != self.navbar:
@@ -712,7 +785,7 @@ class ModernLoginSystem:
         
         tk.Label(
             content_frame,
-            text=f"WELCOME, {full_name}! 👋",
+            text=f"Welcome, {full_name}! 👋",
             font=('Arial', 24, 'bold'),
             fg=self.colors['dark'],
             bg='white'
@@ -738,11 +811,24 @@ class ModernLoginSystem:
                              WHERE owner_id = ? GROUP BY category''', (self.current_user,))
         status_stats = self.cursor.fetchall()
         
+        # Get dynamic counts for each status from the database
+        active_count = 0
+        graduate_count = 0
+        inactive_count = 0
+        
+        for cat, count in status_stats:
+            if cat == 'Active':
+                active_count = count
+            elif cat == 'Graduate':
+                graduate_count = count
+            elif cat == 'Inactive':
+                inactive_count = count
+        
         stats_data = [
             ("Total Students", str(cred_count), self.colors['primary'], "👨‍🎓"),
-            ("Active Students", str(sum(1 for cat, count in status_stats if cat == 'Active')), self.colors['success'], "✅"),
-            ("Graduates", str(sum(1 for cat, count in status_stats if cat == 'Graduate')), self.colors['info'], "🎓"),
-            ("Inactive", str(sum(1 for cat, count in status_stats if cat == 'Inactive')), self.colors['warning'], "⏸️"),
+            ("Active Students", str(active_count), self.colors['success'], "✅"),
+            ("Graduates", str(graduate_count), self.colors['info'], "🎓"),
+            ("Inactive", str(inactive_count), self.colors['warning'], "⏸️"),
         ]
         
         for title, value, color, icon in stats_data:
@@ -854,42 +940,6 @@ class ModernLoginSystem:
                 fg=self.colors['text']
             ).pack(pady=20)
         
-        # Quick actions
-        quick_actions_frame = tk.Frame(scrollable_frame, bg=self.colors['light'])
-        quick_actions_frame.pack(fill=tk.X, padx=30, pady=(0, 30))
-        
-        tk.Label(
-            quick_actions_frame,
-            text="⚡ Quick Actions",
-            font=('Arial', 16, 'bold'),
-            bg=self.colors['light'],
-            fg=self.colors['dark']
-        ).pack(anchor='w', pady=(0, 15))
-        
-        action_buttons = [
-            ("➕ Add New Student", self.add_new_credential, self.colors['primary']),
-            ("📤 Export Records", self.export_options, self.colors['success']),
-            ("📊 Generate Report", self.generate_report, self.colors['info']),
-            ("⚙️ System Settings", self.show_settings, self.colors['warning'])
-        ]
-        
-        for btn_text, command, color in action_buttons:
-            btn = tk.Button(
-                quick_actions_frame,
-                text=btn_text,
-                command=command,
-                font=('Arial', 11),
-                bg=color,
-                fg='white',
-                bd=0,
-                padx=20,
-                pady=10,
-                cursor='hand2',
-                relief='raised'
-            )
-            btn.pack(side=tk.LEFT, padx=(0, 15))
-            btn.bind('<Enter>', lambda e, b=btn, c=color: b.config(bg=self.darken_color(c)))
-            btn.bind('<Leave>', lambda e, b=btn, c=color: b.config(bg=c))
         
         # Footer (NO LOGOUT BUTTON - removed as requested)
         footer_frame = tk.Frame(scrollable_frame, bg=self.colors['light'], height=50)
@@ -898,7 +948,7 @@ class ModernLoginSystem:
         
         tk.Label(
             footer_frame,
-            text="© 2024 St. Peter's College - Student Records Management System",
+            text="© 2026 St. Peter's College - Student Records Management System",
             font=('Arial', 9),
             bg=self.colors['light'],
             fg=self.colors['text']
@@ -919,7 +969,7 @@ class ModernLoginSystem:
         
         # Update immediately
         configure_scrollregion()
-    
+
     def darken_color(self, color):
         """Darken color for hover effect"""
         if color == self.colors['primary']:
@@ -935,6 +985,9 @@ class ModernLoginSystem:
     
     def show_credentials(self):
         """Show student records management screen"""
+        # Set active menu to Student Records
+        self.set_active_menu(1)
+        
         # Clear main content (except navbar)
         for widget in self.main_content.winfo_children():
             if widget != self.navbar:
@@ -990,7 +1043,7 @@ class ModernLoginSystem:
             cursor='hand2'
         )
         add_btn.pack(side=tk.RIGHT)
-        add_btn.bind('<Enter>', lambda e: add_btn.config(bg=self.colors['secondary']))
+        add_btn.bind('<Enter>', lambda e: add_btn.config(bg=self.colors['hover']))
         add_btn.bind('<Leave>', lambda e: add_btn.config(bg=self.colors['primary']))
         
         # Search and filter frame
@@ -1093,49 +1146,56 @@ class ModernLoginSystem:
         self.cred_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         tree_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        # Action buttons frame
+        # Action buttons frame - FIXED ALIGNMENT
         action_frame = tk.Frame(scrollable_frame, bg=self.colors['light'])
         action_frame.pack(fill=tk.X, padx=30, pady=(0, 30))
         
+        # Create a container for buttons to center them
+        button_container = tk.Frame(action_frame, bg=self.colors['light'])
+        button_container.pack(expand=True)
+        
         action_buttons = [
-            ("👁️ View", self.view_credential),
-            ("✏️ Edit", self.edit_credential),
-            ("🗑️ Delete", self.delete_credential),
-            ("📁 Open Attachments", self.open_attachments),
-            ("📤 Export", self.export_options)
+            ("View", self.view_credential),
+            ("Edit", self.edit_credential),
+            ("Delete", self.delete_credential),
+            ("Export", self.export_options)
         ]
         
         for btn_text, command in action_buttons:
             btn = tk.Button(
-                action_frame,
+                button_container,
                 text=btn_text,
                 command=command,
                 font=('Arial', 10),
-                bg='white',
-                fg=self.colors['dark'],
-                bd=1,
-                padx=15,
-                pady=6,
-                cursor='hand2'
+                bg=self.colors['primary'],
+                fg='white',
+                bd=0,
+                padx=20,
+                pady=8,
+                cursor='hand2',
+                relief='raised'
             )
-            btn.pack(side=tk.LEFT, padx=(0, 10))
-            btn.bind('<Enter>', lambda e, b=btn: b.config(bg=self.colors['light']))
-            btn.bind('<Leave>', lambda e, b=btn: b.config(bg='white'))
+            btn.pack(side=tk.LEFT, padx=10)
+            btn.bind('<Enter>', lambda e, b=btn: b.config(bg=self.colors['secondary']))
+            btn.bind('<Leave>', lambda e, b=btn: b.config(bg=self.colors['primary']))
         
-        # Add back to dashboard button
+        # Add back to dashboard button - FIXED POSITIONING
+        bottom_frame = tk.Frame(scrollable_frame, bg=self.colors['light'])
+        bottom_frame.pack(fill=tk.X, padx=30, pady=(0, 30))
+        
         back_btn = tk.Button(
-            scrollable_frame,
+            bottom_frame,
             text="⬅ Back to Dashboard",
             command=self.show_main_dashboard,
-            font=('Arial', 10),
+            font=('Arial', 10, 'bold'),
             bg=self.colors['info'],
             fg='white',
             bd=0,
-            padx=15,
-            pady=6,
+            padx=20,
+            pady=8,
             cursor='hand2'
         )
-        back_btn.pack(side=tk.LEFT, padx=30, pady=(0, 30))
+        back_btn.pack(side=tk.LEFT)
         back_btn.bind('<Enter>', lambda e: back_btn.config(bg=self.colors['primary']))
         back_btn.bind('<Leave>', lambda e: back_btn.config(bg=self.colors['info']))
         
@@ -1160,7 +1220,7 @@ class ModernLoginSystem:
         
         # Update immediately
         configure_scrollregion()
-    
+
     def load_credentials(self, search_text="", status="All"):  # Changed parameter name
         """Load student records from database"""
         # Clear existing items
@@ -1179,20 +1239,21 @@ class ModernLoginSystem:
             query += " AND (title LIKE ? OR username LIKE ? OR password LIKE ? OR last_name LIKE ? OR first_name LIKE ? OR middle_name LIKE ?)"
             search_pattern = f"%{search_text}%"
             params.extend([search_pattern, search_pattern, search_pattern, search_pattern, 
-                          search_pattern, search_pattern])
+                        search_pattern, search_pattern])
         
         if status != "All":  # Changed from category
             query += " AND category = ?"
             params.append(status)
         
-        query += " ORDER BY updated_at DESC"
+        # FIX: Sort by ID (NO. column) in descending order so newest records appear first
+        query += " ORDER BY id DESC"  # Changed from updated_at DESC to id DESC
         
         # Execute query
         self.cursor.execute(query, params)
         credentials = self.cursor.fetchall()
         
-        # Add to treeview
-        for cred in credentials:
+        # Add to treeview with sequential numbers
+        for index, cred in enumerate(credentials, 1):
             cred_id, id_number, first_name, last_name, status, attachments_json, updated_at = cred
             
             # Parse attachments JSON
@@ -1207,8 +1268,9 @@ class ModernLoginSystem:
             else:
                 display_attachments = "No attachments"
             
-            self.cred_tree.insert('', 'end', values=(cred_id, id_number, first_name, last_name, status, display_attachments, updated_at))
-    
+            # Use sequential index (1, 2, 3, ...) for display instead of actual database ID
+            self.cred_tree.insert('', 'end', values=(index, id_number, first_name, last_name, status, display_attachments, updated_at))
+
     def filter_credentials(self):
         """Filter student records based on search and status"""
         search_text = self.search_var.get()
@@ -1219,16 +1281,28 @@ class ModernLoginSystem:
         """Show export options dialog"""
         dialog = tk.Toplevel(self.root)
         dialog.title("Export Options")
-        dialog.geometry("400x300")
+        
+        # Get screen dimensions
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        
+        # Calculate dialog size (40% of screen, but max 450x400)
+        dialog_width = min(int(screen_width * 0.4), 450)
+        dialog_height = min(int(screen_height * 0.5), 400)
+        
+        dialog.geometry(f"{dialog_width}x{dialog_height}")
         dialog.configure(bg=self.colors['background'])
         dialog.transient(self.root)
         dialog.grab_set()
         
         # Center dialog
         dialog.update_idletasks()
-        x = (self.root.winfo_screenwidth() // 2) - (400 // 2)
-        y = (self.root.winfo_screenheight() // 2) - (300 // 2)
-        dialog.geometry(f'400x300+{x}+{y}')
+        x = (screen_width // 2) - (dialog_width // 2)
+        y = (screen_height // 2) - (dialog_height // 2)
+        dialog.geometry(f'{dialog_width}x{dialog_height}+{x}+{y}')
+        
+        # Make dialog non-resizable for this simple dialog
+        dialog.resizable(False, False)
         
         tk.Label(
             dialog,
@@ -1424,7 +1498,7 @@ class ModernLoginSystem:
         # Get student record details
         self.cursor.execute('''
             SELECT title, username, password, attachments, category, first_name, middle_name, last_name, created_at, updated_at, 
-                   last_school_year, contact_number, so_number, date_issued, series_year
+                   last_school_year, contact_number, so_number, date_issued, series_year, lrn
             FROM credentials 
             WHERE id = ? AND owner_id = ?
         ''', (cred_id, self.current_user))
@@ -1435,7 +1509,7 @@ class ModernLoginSystem:
             messagebox.showerror("Error", "Student record not found")
             return
         
-        title, id_number, first_name, attachments_json, status, fname, mname, lname, created_at, updated_at, last_school_year, contact_number, so_number, date_issued, series_year = student  # Changed variable name
+        title, id_number, first_name, attachments_json, status, fname, mname, lname, created_at, updated_at, last_school_year, contact_number, so_number, date_issued, series_year, lrn = student
         
         try:
             # Ask for save location
@@ -1500,7 +1574,8 @@ class ModernLoginSystem:
                     ['Contact Number', contact_number if contact_number else 'N/A'],
                     ['SO Number', so_number if so_number else 'N/A'],
                     ['Date Issued', date_issued if date_issued else 'N/A'],
-                    ['Series of Year', series_year if series_year else 'N/A']
+                    ['Series of Year', series_year if series_year else 'N/A'],
+                    ['LRN (Learner Reference Number)', lrn if lrn else 'N/A']  # ✅ ADDED LRN
                 ])
             
             info_table = Table(info_data, colWidths=[2*inch, 4*inch])
@@ -1542,6 +1617,9 @@ class ModernLoginSystem:
     
     def export_statistics_to_pdf(self):
         """Export system statistics to PDF"""
+        # Set active menu to Reports
+        self.set_active_menu(2)
+        
         try:
             # Get statistics
             self.cursor.execute('SELECT COUNT(*) FROM credentials WHERE owner_id = ?', (self.current_user,))
@@ -1892,29 +1970,42 @@ class ModernLoginSystem:
         """Open dialog to add new student record"""
         dialog = tk.Toplevel(self.root)
         dialog.title("Add New Student Record")
-        dialog.geometry("500x800")  # Slightly increased height
+        
+        # Get screen dimensions
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        
+        # Calculate dialog size (80% of screen, but max 900x700)
+        dialog_width = min(int(screen_width * 0.8), 900)
+        dialog_height = min(int(screen_height * 0.8), 700)
+        
+        dialog.geometry(f"{dialog_width}x{dialog_height}")
         dialog.configure(bg=self.colors['background'])
         dialog.transient(self.root)
         dialog.grab_set()
         
-        # Center dialog
+        # Center dialog on screen
         dialog.update_idletasks()
-        x = (self.root.winfo_screenwidth() // 2) - (500 // 2)
-        y = (self.root.winfo_screenheight() // 2) - (800 // 2)
-        dialog.geometry(f'500x800+{x}+{y}')
+        x = (screen_width // 2) - (dialog_width // 2)
+        y = (screen_height // 2) - (dialog_height // 2)
+        dialog.geometry(f'{dialog_width}x{dialog_height}+{x}+{y}')
+        
+        # Make dialog resizable
+        dialog.resizable(True, True)
         
         # Create a scrollable canvas with responsive width
         canvas = tk.Canvas(dialog, bg=self.colors['background'])
         scrollbar = ttk.Scrollbar(dialog, orient="vertical", command=canvas.yview)
         scrollable_frame = tk.Frame(canvas, bg=self.colors['background'])
+        scrollable_frame.pack(fill="both", expand=True)
         
         def configure_scrollregion(event=None):
             if canvas.winfo_exists():
                 canvas.configure(scrollregion=canvas.bbox("all"))
-                # Update canvas width
+                # Update canvas width to fit dialog
                 canvas_width = dialog.winfo_width()
                 if canvas_width > 1:
-                    canvas.itemconfig(window_id, width=canvas_width)
+                    canvas.itemconfig(window_id, width=canvas_width-20)  # Subtract scrollbar width
         
         scrollable_frame.bind("<Configure>", configure_scrollregion)
         
@@ -1933,73 +2024,153 @@ class ModernLoginSystem:
             bg=self.colors['background']
         ).pack(pady=(30, 20), anchor='center', expand=True, fill='x')
         
-        # Form fields container
-        form_container = tk.Frame(scrollable_frame, bg=self.colors['background'])
-        form_container.pack(fill=tk.BOTH, expand=True, padx=50)
+        # Main container for left-to-right layout
+        main_form_container = tk.Frame(scrollable_frame, bg=self.colors['background'])
+        main_form_container.pack(fill=tk.BOTH, expand=True, padx=min(50, int(dialog_width * 0.1)))
         
-        # Form fields
-        fields = [
-            ("ID Number", "Enter student ID number"),
-            ("First Name", "Enter first name"),
-            ("Middle Name", "Enter middle name (optional)"),
-            ("Last Name", "Enter last name"),
-        ]
+        # Create two columns for left-to-right layout
+        left_column = tk.Frame(main_form_container, bg=self.colors['background'])
+        left_column.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 20))
         
-        entries = {}
+        right_column = tk.Frame(main_form_container, bg=self.colors['background'])
+        right_column.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
-        for i, (label_text, placeholder) in enumerate(fields):
-            tk.Label(
-                form_container,
-                text=label_text,
-                font=('Arial', 10, 'bold'),
-                fg=self.colors['primary'],
-                bg=self.colors['background']
-            ).pack(anchor='w', pady=(10, 5))
-            
-            frame = tk.Frame(form_container, bg=self.colors['card_bg'], height=40)
-            frame.pack(fill=tk.X, pady=(0, 10))
-            frame.pack_propagate(False)
-            
-            entry = tk.Entry(
-                frame,
-                font=('Arial', 11),
-                bd=0,
-                bg=self.colors['card_bg'],
-                fg=self.colors['dark']
-            )
-            entry.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=15)
-            entry.insert(0, placeholder)
-            entry.bind('<FocusIn>', lambda e, w=entry, p=placeholder: w.delete(0, tk.END) if w.get() == p else None)
-            entry.bind('<FocusOut>', lambda e, w=entry, p=placeholder: w.insert(0, p) if not w.get() else None)
-            
-            entries[label_text] = entry
-        
-        # STATUS field (changed from Category)
+        # Form fields - LEFT COLUMN
         tk.Label(
-            form_container,
-            text="Status",  # Changed from "Category"
+            left_column,
+            text="👤 Basic Information",
+            font=('Arial', 14, 'bold'),
+            fg=self.colors['primary'],
+            bg=self.colors['background']
+        ).pack(anchor='w', pady=(0, 15))
+        
+        # ID Number
+        tk.Label(
+            left_column,
+            text="ID Number *",
             font=('Arial', 10, 'bold'),
             fg=self.colors['primary'],
             bg=self.colors['background']
-        ).pack(anchor='w', pady=(10, 5))
+        ).pack(anchor='w', pady=(5, 2))
         
-        status_frame = tk.Frame(form_container, bg=self.colors['card_bg'], height=40)
-        status_frame.pack(fill=tk.X, pady=(0, 10))
+        id_frame = tk.Frame(left_column, bg=self.colors['card_bg'], height=35)
+        id_frame.pack(fill=tk.X, pady=(0, 10))
+        id_frame.pack_propagate(False)
+        
+        id_entry = tk.Entry(
+            id_frame,
+            font=('Arial', 11),
+            bd=0,
+            bg=self.colors['card_bg'],
+            fg=self.colors['dark']
+        )
+        id_entry.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10)
+        id_entry.insert(0, "Enter student ID number")
+        id_entry.bind('<FocusIn>', lambda e: id_entry.delete(0, tk.END) if id_entry.get() == "Enter student ID number" else None)
+        id_entry.bind('<FocusOut>', lambda e: id_entry.insert(0, "Enter student ID number") if not id_entry.get() else None)
+        
+        # First Name
+        tk.Label(
+            left_column,
+            text="First Name *",
+            font=('Arial', 10, 'bold'),
+            fg=self.colors['primary'],
+            bg=self.colors['background']
+        ).pack(anchor='w', pady=(5, 2))
+        
+        first_name_frame = tk.Frame(left_column, bg=self.colors['card_bg'], height=35)
+        first_name_frame.pack(fill=tk.X, pady=(0, 10))
+        first_name_frame.pack_propagate(False)
+        
+        first_name_entry = tk.Entry(
+            first_name_frame,
+            font=('Arial', 11),
+            bd=0,
+            bg=self.colors['card_bg'],
+            fg=self.colors['dark']
+        )
+        first_name_entry.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10)
+        first_name_entry.insert(0, "Enter first name")
+        first_name_entry.bind('<FocusIn>', lambda e: first_name_entry.delete(0, tk.END) if first_name_entry.get() == "Enter first name" else None)
+        first_name_entry.bind('<FocusOut>', lambda e: first_name_entry.insert(0, "Enter first name") if not first_name_entry.get() else None)
+        
+        # Middle Name
+        tk.Label(
+            left_column,
+            text="Middle Name",
+            font=('Arial', 10, 'bold'),
+            fg=self.colors['primary'],
+            bg=self.colors['background']
+        ).pack(anchor='w', pady=(5, 2))
+        
+        middle_name_frame = tk.Frame(left_column, bg=self.colors['card_bg'], height=35)
+        middle_name_frame.pack(fill=tk.X, pady=(0, 10))
+        middle_name_frame.pack_propagate(False)
+        
+        middle_name_entry = tk.Entry(
+            middle_name_frame,
+            font=('Arial', 11),
+            bd=0,
+            bg=self.colors['card_bg'],
+            fg=self.colors['dark']
+        )
+        middle_name_entry.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10)
+        middle_name_entry.insert(0, "Enter middle name (optional)")
+        middle_name_entry.bind('<FocusIn>', lambda e: middle_name_entry.delete(0, tk.END) if middle_name_entry.get() == "Enter middle name (optional)" else None)
+        middle_name_entry.bind('<FocusOut>', lambda e: middle_name_entry.insert(0, "Enter middle name (optional)") if not middle_name_entry.get() else None)
+        
+        # Last Name
+        tk.Label(
+            left_column,
+            text="Last Name *",
+            font=('Arial', 10, 'bold'),
+            fg=self.colors['primary'],
+            bg=self.colors['background']
+        ).pack(anchor='w', pady=(5, 2))
+        
+        last_name_frame = tk.Frame(left_column, bg=self.colors['card_bg'], height=35)
+        last_name_frame.pack(fill=tk.X, pady=(0, 10))
+        last_name_frame.pack_propagate(False)
+        
+        last_name_entry = tk.Entry(
+            last_name_frame,
+            font=('Arial', 11),
+            bd=0,
+            bg=self.colors['card_bg'],
+            fg=self.colors['dark']
+        )
+        last_name_entry.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10)
+        last_name_entry.insert(0, "Enter last name")
+        last_name_entry.bind('<FocusIn>', lambda e: last_name_entry.delete(0, tk.END) if last_name_entry.get() == "Enter last name" else None)
+        last_name_entry.bind('<FocusOut>', lambda e: last_name_entry.insert(0, "Enter last name") if not last_name_entry.get() else None)
+        
+        # Status field - LEFT COLUMN
+        tk.Label(
+            left_column,
+            text="Status *",
+            font=('Arial', 10, 'bold'),
+            fg=self.colors['primary'],
+            bg=self.colors['background']
+        ).pack(anchor='w', pady=(5, 2))
+        
+        status_frame = tk.Frame(left_column, bg=self.colors['card_bg'], height=35)
+        status_frame.pack(fill=tk.X, pady=(0, 15))
         status_frame.pack_propagate(False)
         
-        # Changed values to include "Active" as default
-        status_var = tk.StringVar(value="Active")  # Changed default to "Active"
+        status_var = tk.StringVar(value="Active")
         
         def on_status_change(*args):
             """Show/hide graduate fields based on status selection"""
             status = status_var.get()
-            if status == "Graduate":  # Only show graduate fields for Graduates
-                for field_name, entry in graduate_entries.items():
-                    entry['label'].pack(anchor='w', pady=(10, 5))
+            if status == "Graduate":
+                # Show graduate fields
+                for label_text, entry in graduate_entries.items():
+                    entry['label'].pack(anchor='w', pady=(5, 2))
                     entry['frame'].pack(fill=tk.X, pady=(0, 10))
-                    entry['widget'].pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=15)
+                    entry['widget'].pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10)
             else:
-                for field_name, entry in graduate_entries.items():
+                # Hide graduate fields
+                for label_text, entry in graduate_entries.items():
                     entry['label'].pack_forget()
                     entry['frame'].pack_forget()
                     entry['widget'].pack_forget()
@@ -2011,73 +2182,83 @@ class ModernLoginSystem:
         
         status_var.trace_add('write', on_status_change)
         
-        # Updated status options
         status_menu = ttk.Combobox(
             status_frame,
             textvariable=status_var,
-            values=['Active', 'Graduate', 'Inactive'],  # Changed options
+            values=['Active', 'Graduate', 'Inactive'],
             font=('Arial', 11),
             state='readonly'
         )
-        status_menu.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=15)
+        status_menu.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10)
         
-        entries['Status'] = status_var  # Changed key from 'Category' to 'Status'
+        # RIGHT COLUMN - Graduate Information
+        tk.Label(
+            right_column,
+            text="🎓 Graduate Information",
+            font=('Arial', 14, 'bold'),
+            fg=self.colors['primary'],
+            bg=self.colors['background']
+        ).pack(anchor='w', pady=(0, 15))
         
-        # Graduate-specific fields (initially hidden)
+        # Graduate-specific fields (initially hidden) - INCLUDING LRN
         graduate_fields = [
             ("Last School Year Attended", "Enter last school year attended"),
             ("Contact Number", "Enter contact number"),
             ("SO Number", "Enter SO number"),
             ("Date Issued", "Enter date issued (YYYY-MM-DD)"),
-            ("Series of Year", "Enter series of year")
+            ("Series of Year", "Enter series of year"),
+            ("LRN (Learner Reference Number)", "Enter LRN")
         ]
         
         graduate_entries = {}
-
+        
         for label_text, placeholder in graduate_fields:
-            # Label (same style)
+            # Label
             label = tk.Label(
-                form_container,
+                right_column,
                 text=label_text,
                 font=('Arial', 10, 'bold'),
                 fg=self.colors['primary'],
                 bg=self.colors['background']
             )
-
-            # Frame (same as First Name)
-            frame = tk.Frame(form_container, bg=self.colors['card_bg'], height=40)
+            
+            # Frame
+            frame = tk.Frame(right_column, bg=self.colors['card_bg'], height=35)
             frame.pack_propagate(False)
-
-            # Entry (same padding)
+            
+            # Entry
             entry = tk.Entry(
-                frame, 
-                font=('Arial', 11), 
-                bd=0, 
+                frame,
+                font=('Arial', 11),
+                bd=0,
                 bg=self.colors['card_bg'],
                 fg=self.colors['dark']
             )
-            entry.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=15)
+            entry.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10)
             entry.insert(0, placeholder)
             
             entry.bind('<FocusIn>', lambda e, w=entry, p=placeholder: w.delete(0, tk.END) if w.get() == p else None)
             entry.bind('<FocusOut>', lambda e, w=entry, p=placeholder: w.insert(0, p) if not w.get() else None)
-
+            
             graduate_entries[label_text] = {
                 "label": label,
                 "frame": frame,
                 "widget": entry
             }
         
-        # Attachments section
+        # Attachments section - Full width below the two columns
+        attachments_container = tk.Frame(scrollable_frame, bg=self.colors['background'])
+        attachments_container.pack(fill=tk.X, expand=False, padx=min(50, int(dialog_width * 0.1)), pady=(20, 0))
+        
         tk.Label(
-            form_container,
-            text="Attachments",
-            font=('Arial', 10, 'bold'),
+            attachments_container,
+            text="📁 Attachments",
+            font=('Arial', 14, 'bold'),
             fg=self.colors['primary'],
             bg=self.colors['background']
-        ).pack(anchor='w', pady=(10, 5))
+        ).pack(anchor='w', pady=(0, 10))
         
-        attachments_frame = tk.Frame(form_container, bg=self.colors['card_bg'], height=150)
+        attachments_frame = tk.Frame(attachments_container, bg=self.colors['card_bg'], height=150)
         attachments_frame.pack(fill=tk.X, pady=(0, 10))
         attachments_frame.pack_propagate(False)
         
@@ -2166,11 +2347,11 @@ class ModernLoginSystem:
             """Save new student record to database"""
             try:
                 # Get values
-                id_number = entries['ID Number'].get() if hasattr(entries['ID Number'], 'get') else entries['ID Number']
-                first_name = entries['First Name'].get() if hasattr(entries['First Name'], 'get') else entries['First Name']
-                middle_name = entries['Middle Name'].get() if hasattr(entries['Middle Name'], 'get') else entries['Middle Name']
-                last_name = entries['Last Name'].get() if hasattr(entries['Last Name'], 'get') else entries['Last Name']
-                status = entries['Status'].get() if hasattr(entries['Status'], 'get') else entries['Status']  # Changed from category
+                id_number = id_entry.get()
+                first_name = first_name_entry.get()
+                middle_name = middle_name_entry.get()
+                last_name = last_name_entry.get()
+                status = status_var.get()
                 
                 # Validate required fields
                 if not id_number or id_number == "Enter student ID number":
@@ -2195,8 +2376,9 @@ class ModernLoginSystem:
                 so_number = ""
                 date_issued = ""
                 series_year = ""
+                lrn = ""
                 
-                if status == "Graduate":  # Only show for Graduates
+                if status == "Graduate":
                     last_school_year = graduate_entries["Last School Year Attended"]['widget'].get()
                     if last_school_year == "Enter last school year attended":
                         last_school_year = ""
@@ -2216,6 +2398,10 @@ class ModernLoginSystem:
                     series_year = graduate_entries["Series of Year"]['widget'].get()
                     if series_year == "Enter series of year":
                         series_year = ""
+                    
+                    lrn = graduate_entries["LRN (Learner Reference Number)"]['widget'].get()
+                    if lrn == "Enter LRN":
+                        lrn = ""
                 
                 # Create title from name
                 title = f"{first_name} {last_name} ({id_number})"
@@ -2241,9 +2427,9 @@ class ModernLoginSystem:
                 
                 # Insert into database (using 'category' column for status)
                 self.cursor.execute('''
-                    INSERT INTO credentials (title, username, password, attachments, category, first_name, middle_name, last_name, owner_id, last_school_year, contact_number, so_number, date_issued, series_year)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (title, id_number, first_name, json.dumps(saved_attachments), status, first_name, middle_name, last_name, self.current_user, last_school_year, contact_number, so_number, date_issued, series_year))
+                    INSERT INTO credentials (title, username, password, attachments, category, first_name, middle_name, last_name, owner_id, last_school_year, contact_number, so_number, date_issued, series_year, lrn)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (title, id_number, first_name, json.dumps(saved_attachments), status, first_name, middle_name, last_name, self.current_user, last_school_year, contact_number, so_number, date_issued, series_year, lrn))
                 self.conn.commit()
                 
                 messagebox.showinfo("Success", f"Student record saved successfully!\nStatus: {status}\n{len(saved_attachments)} attachment(s) added.")
@@ -2253,13 +2439,17 @@ class ModernLoginSystem:
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to save student record: {str(e)}")
         
-        # Button container
+        # Button container - Full width
         button_container = tk.Frame(scrollable_frame, bg=self.colors['background'])
-        button_container.pack(fill=tk.X, pady=30)
+        button_container.pack(fill=tk.X, pady=30, padx=min(50, int(dialog_width * 0.1)))
         
+        # Button container for centering
+        center_frame = tk.Frame(button_container, bg=self.colors['background'])
+        center_frame.pack(pady=20)
+
         # Save button
         save_btn = tk.Button(
-            button_container,
+            center_frame,
             text="💾 Save Student Record",
             command=save_credential,
             font=('Arial', 12, 'bold'),
@@ -2268,26 +2458,28 @@ class ModernLoginSystem:
             bd=0,
             padx=30,
             pady=10,
-            cursor='hand2'
+            cursor='hand2',
+            width=20  # Fixed width for consistent size
         )
-        save_btn.pack(pady=10)
-        save_btn.bind('<Enter>', lambda e: save_btn.config(bg=self.colors['secondary']))
+        save_btn.pack(side=tk.LEFT, padx=(0, 10))
+        save_btn.bind('<Enter>', lambda e: save_btn.config(bg='#d90429'))
         save_btn.bind('<Leave>', lambda e: save_btn.config(bg=self.colors['primary']))
-        
+
         # Cancel button
         cancel_btn = tk.Button(
-            button_container,
+            center_frame,
             text="Cancel",
             command=dialog.destroy,
-            font=('Arial', 10),
+            font=('Arial', 12, 'bold'),  # Same font size
             bg=self.colors['danger'],
             fg='white',
             bd=0,
-            padx=20,
-            pady=8,
-            cursor='hand2'
+            padx=30,  # Same padding
+            pady=10,  # Same padding
+            cursor='hand2',
+            width=20  # Same fixed width
         )
-        cancel_btn.pack(pady=5)
+        cancel_btn.pack(side=tk.LEFT)
         cancel_btn.bind('<Enter>', lambda e: cancel_btn.config(bg='#d90429'))
         cancel_btn.bind('<Leave>', lambda e: cancel_btn.config(bg=self.colors['danger']))
         
@@ -2317,10 +2509,10 @@ class ModernLoginSystem:
             messagebox.showerror("Error", "Student record not found")
             return
         
-        # Unpack the record
+        # Unpack the record (with LRN)
         (cred_id_db, title, id_number, first_name, attachments_json, status, 
          fname, mname, lname, owner_id, created_at, updated_at, last_school_year, 
-         contact_number, so_number, date_issued, series_year) = cred  # Changed variable name
+         contact_number, so_number, date_issued, series_year, lrn) = cred
         
         # Parse attachments
         try:
@@ -2328,32 +2520,45 @@ class ModernLoginSystem:
         except:
             attachments = []
         
-        # Create edit dialog
+        # Create edit dialog with left-to-right layout
         dialog = tk.Toplevel(self.root)
         dialog.title(f"Edit Student Record: {title}")
-        dialog.geometry("500x800")  # Adjusted height
+        
+        # Get screen dimensions
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        
+        # Calculate dialog size (80% of screen, but max 900x700)
+        dialog_width = min(int(screen_width * 0.8), 900)
+        dialog_height = min(int(screen_height * 0.8), 700)
+        
+        dialog.geometry(f"{dialog_width}x{dialog_height}")
         dialog.configure(bg=self.colors['background'])
         dialog.transient(self.root)
         dialog.grab_set()
         
-        # Center dialog
+        # Center dialog on screen
         dialog.update_idletasks()
-        x = (self.root.winfo_screenwidth() // 2) - (500 // 2)
-        y = (self.root.winfo_screenheight() // 2) - (800 // 2)
-        dialog.geometry(f'500x800+{x}+{y}')
+        x = (screen_width // 2) - (dialog_width // 2)
+        y = (screen_height // 2) - (dialog_height // 2)
+        dialog.geometry(f'{dialog_width}x{dialog_height}+{x}+{y}')
+        
+        # Make dialog resizable
+        dialog.resizable(True, True)
         
         # Create a scrollable canvas with responsive width
         canvas = tk.Canvas(dialog, bg=self.colors['background'])
         scrollbar = ttk.Scrollbar(dialog, orient="vertical", command=canvas.yview)
         scrollable_frame = tk.Frame(canvas, bg=self.colors['background'])
+        scrollable_frame.pack(fill="both", expand=True)
         
         def configure_scrollregion(event=None):
             if canvas.winfo_exists():
                 canvas.configure(scrollregion=canvas.bbox("all"))
-                # Update canvas width
+                # Update canvas width to fit dialog
                 canvas_width = dialog.winfo_width()
                 if canvas_width > 1:
-                    canvas.itemconfig(window_id, width=canvas_width)
+                    canvas.itemconfig(window_id, width=canvas_width-20)  # Subtract scrollbar width
         
         scrollable_frame.bind("<Configure>", configure_scrollregion)
         
@@ -2372,145 +2577,240 @@ class ModernLoginSystem:
             bg=self.colors['background']
         ).pack(pady=(30, 20), anchor='center', expand=True, fill='x')
         
-        # Form fields container
-        form_container = tk.Frame(scrollable_frame, bg=self.colors['background'])
-        form_container.pack(fill=tk.BOTH, expand=True, padx=50)
+        # Main container for left-to-right layout
+        main_form_container = tk.Frame(scrollable_frame, bg=self.colors['background'])
+        main_form_container.pack(fill=tk.BOTH, expand=True, padx=min(50, int(dialog_width * 0.1)))
         
-        # Form fields
-        fields = [
-            ("ID Number", id_number),
-            ("First Name", first_name),
-            ("Middle Name", mname if mname else ""),
-            ("Last Name", lname),
-        ]
+        # Create two columns for left-to-right layout
+        left_column = tk.Frame(main_form_container, bg=self.colors['background'])
+        left_column.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 20))
         
-        entries = {}
+        right_column = tk.Frame(main_form_container, bg=self.colors['background'])
+        right_column.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
-        for i, (label_text, default_value) in enumerate(fields):
-            tk.Label(
-                form_container,
-                text=label_text,
-                font=('Arial', 10, 'bold'),
-                fg=self.colors['primary'],
-                bg=self.colors['background']
-            ).pack(anchor='w', pady=(10, 5))
-            
-            frame = tk.Frame(form_container, bg=self.colors['card_bg'], height=40)
-            frame.pack(fill=tk.X, pady=(0, 10))
-            frame.pack_propagate(False)
-            
-            entry = tk.Entry(frame, font=('Arial', 11), bd=0, bg=self.colors['card_bg'], fg=self.colors['dark'])
-            entry.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=15)
-            entry.insert(0, default_value)
-            
-            entries[label_text] = entry
-        
-        # STATUS field (changed from Category)
+        # Form fields - LEFT COLUMN
         tk.Label(
-            form_container,
-            text="Status",  # Changed label
+            left_column,
+            text="👤 Basic Information",
+            font=('Arial', 14, 'bold'),
+            fg=self.colors['primary'],
+            bg=self.colors['background']
+        ).pack(anchor='w', pady=(0, 15))
+        
+        # ID Number
+        tk.Label(
+            left_column,
+            text="ID Number *",
             font=('Arial', 10, 'bold'),
             fg=self.colors['primary'],
             bg=self.colors['background']
-        ).pack(anchor='w', pady=(10, 5))
+        ).pack(anchor='w', pady=(5, 2))
         
-        status_frame = tk.Frame(form_container, bg=self.colors['card_bg'], height=40)
-        status_frame.pack(fill=tk.X, pady=(0, 10))
+        id_frame = tk.Frame(left_column, bg=self.colors['card_bg'], height=35)
+        id_frame.pack(fill=tk.X, pady=(0, 10))
+        id_frame.pack_propagate(False)
+        
+        id_entry = tk.Entry(
+            id_frame,
+            font=('Arial', 11),
+            bd=0,
+            bg=self.colors['card_bg'],
+            fg=self.colors['dark']
+        )
+        id_entry.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10)
+        id_entry.insert(0, id_number)
+        
+        # First Name
+        tk.Label(
+            left_column,
+            text="First Name *",
+            font=('Arial', 10, 'bold'),
+            fg=self.colors['primary'],
+            bg=self.colors['background']
+        ).pack(anchor='w', pady=(5, 2))
+        
+        first_name_frame = tk.Frame(left_column, bg=self.colors['card_bg'], height=35)
+        first_name_frame.pack(fill=tk.X, pady=(0, 10))
+        first_name_frame.pack_propagate(False)
+        
+        first_name_entry = tk.Entry(
+            first_name_frame,
+            font=('Arial', 11),
+            bd=0,
+            bg=self.colors['card_bg'],
+            fg=self.colors['dark']
+        )
+        first_name_entry.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10)
+        first_name_entry.insert(0, first_name)
+        
+        # Middle Name
+        tk.Label(
+            left_column,
+            text="Middle Name",
+            font=('Arial', 10, 'bold'),
+            fg=self.colors['primary'],
+            bg=self.colors['background']
+        ).pack(anchor='w', pady=(5, 2))
+        
+        middle_name_frame = tk.Frame(left_column, bg=self.colors['card_bg'], height=35)
+        middle_name_frame.pack(fill=tk.X, pady=(0, 10))
+        middle_name_frame.pack_propagate(False)
+        
+        middle_name_entry = tk.Entry(
+            middle_name_frame,
+            font=('Arial', 11),
+            bd=0,
+            bg=self.colors['card_bg'],
+            fg=self.colors['dark']
+        )
+        middle_name_entry.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10)
+        middle_name_entry.insert(0, mname if mname else "")
+        
+        # Last Name
+        tk.Label(
+            left_column,
+            text="Last Name *",
+            font=('Arial', 10, 'bold'),
+            fg=self.colors['primary'],
+            bg=self.colors['background']
+        ).pack(anchor='w', pady=(5, 2))
+        
+        last_name_frame = tk.Frame(left_column, bg=self.colors['card_bg'], height=35)
+        last_name_frame.pack(fill=tk.X, pady=(0, 10))
+        last_name_frame.pack_propagate(False)
+        
+        last_name_entry = tk.Entry(
+            last_name_frame,
+            font=('Arial', 11),
+            bd=0,
+            bg=self.colors['card_bg'],
+            fg=self.colors['dark']
+        )
+        last_name_entry.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10)
+        last_name_entry.insert(0, lname)
+        
+        # Status field - LEFT COLUMN
+        tk.Label(
+            left_column,
+            text="Status *",
+            font=('Arial', 10, 'bold'),
+            fg=self.colors['primary'],
+            bg=self.colors['background']
+        ).pack(anchor='w', pady=(5, 2))
+        
+        status_frame = tk.Frame(left_column, bg=self.colors['card_bg'], height=35)
+        status_frame.pack(fill=tk.X, pady=(0, 15))
         status_frame.pack_propagate(False)
         
-        status_var = tk.StringVar(value=status)  # Changed variable name
+        status_var = tk.StringVar(value=status)
         
         def on_status_change(*args):
             """Show/hide graduate fields based on status selection"""
             stat = status_var.get()
-            if stat == "Graduate":  # Only show graduate fields for Graduates
+            if stat == "Graduate":
                 # Show graduate fields
-                for field_name, entry in graduate_entries.items():
-                    entry_frame = entry['frame']
-                    entry_widget = entry['widget']
-                    entry_frame.pack(fill=tk.X, pady=(0, 10))
-                    entry_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=15)
+                for label_text, entry in graduate_entries.items():
+                    entry['label'].pack(anchor='w', pady=(5, 2))
+                    entry['frame'].pack(fill=tk.X, pady=(0, 10))
+                    entry['widget'].pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10)
             else:
                 # Hide graduate fields
-                for field_name, entry in graduate_entries.items():
-                    entry_frame = entry['frame']
-                    entry_widget = entry['widget']
-                    entry_frame.pack_forget()
-                    entry_widget.pack_forget()
+                for label_text, entry in graduate_entries.items():
+                    entry['label'].pack_forget()
+                    entry['frame'].pack_forget()
+                    entry['widget'].pack_forget()
             
             # Update scrollable area
             scrollable_frame.update_idletasks()
             if canvas.winfo_exists():
                 canvas.configure(scrollregion=canvas.bbox("all"))
         
-        status_var.trace_add('write', on_status_change)  # Changed variable name
+        status_var.trace_add('write', on_status_change)
         
-        # Updated status options
         status_menu = ttk.Combobox(
             status_frame,
             textvariable=status_var,
-            values=['Active', 'Graduate', 'Inactive'],  # Changed options
+            values=['Active', 'Graduate', 'Inactive'],
             font=('Arial', 11),
             state='readonly'
         )
-        status_menu.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=15)
+        status_menu.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10)
         
-        entries['Status'] = status_var  # Changed key
+        # RIGHT COLUMN - Graduate Information
+        tk.Label(
+            right_column,
+            text="🎓 Graduate Information",
+            font=('Arial', 14, 'bold'),
+            fg=self.colors['primary'],
+            bg=self.colors['background']
+        ).pack(anchor='w', pady=(0, 15))
         
-        # Graduate-specific fields
+        # Graduate-specific fields (INCLUDING LRN)
         graduate_fields = [
             ("Last School Year Attended", last_school_year if last_school_year else "Enter last school year attended"),
             ("Contact Number", contact_number if contact_number else "Enter contact number"),
             ("SO Number", so_number if so_number else "Enter SO number"),
             ("Date Issued", date_issued if date_issued else "Enter date issued (YYYY-MM-DD)"),
-            ("Series of Year", series_year if series_year else "Enter series of year")
+            ("Series of Year", series_year if series_year else "Enter series of year"),
+            ("LRN (Learner Reference Number)", lrn if lrn else "Enter LRN")
         ]
         
         graduate_entries = {}
         
-        for i, (label_text, default_value) in enumerate(graduate_fields):
-            # Create the label
+        for label_text, default_value in graduate_fields:
+            # Label
             label = tk.Label(
-                form_container,
+                right_column,
                 text=label_text,
                 font=('Arial', 10, 'bold'),
                 fg=self.colors['primary'],
                 bg=self.colors['background']
             )
             
-            # Create the frame
-            frame = tk.Frame(form_container, bg=self.colors['card_bg'], height=40)
+            # Frame
+            frame = tk.Frame(right_column, bg=self.colors['card_bg'], height=35)
+            frame.pack_propagate(False)
             
-            # Create the entry widget
-            entry = tk.Entry(frame, font=('Arial', 11), bd=0, bg=self.colors['card_bg'], fg=self.colors['dark'])
+            # Entry
+            entry = tk.Entry(
+                frame,
+                font=('Arial', 11),
+                bd=0,
+                bg=self.colors['card_bg'],
+                fg=self.colors['dark']
+            )
+            entry.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10)
             entry.insert(0, default_value)
+            
             entry.bind('<FocusIn>', lambda e, w=entry, d=default_value: w.delete(0, tk.END) if w.get() == d else None)
             entry.bind('<FocusOut>', lambda e, w=entry, d=default_value: w.insert(0, d) if not w.get() else None)
             
-            # Store references
             graduate_entries[label_text] = {
-                'label': label,
-                'frame': frame,
-                'widget': entry
+                "label": label,
+                "frame": frame,
+                "widget": entry
             }
         
         # Show graduate fields if status is Graduate
         if status == "Graduate":
-            for field_name, entry in graduate_entries.items():
-                entry['label'].pack(anchor='w', pady=(10, 5))
+            for label_text, entry in graduate_entries.items():
+                entry['label'].pack(anchor='w', pady=(5, 2))
                 entry['frame'].pack(fill=tk.X, pady=(0, 10))
-                entry['widget'].pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=15)
+                entry['widget'].pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10)
         
-        # Attachments section
+        # Attachments section - Full width below the two columns
+        attachments_container = tk.Frame(scrollable_frame, bg=self.colors['background'])
+        attachments_container.pack(fill=tk.X, expand=False, padx=min(50, int(dialog_width * 0.1)), pady=(20, 0))
+        
         tk.Label(
-            form_container,
-            text=f"Attachments ({len(attachments)})",
-            font=('Arial', 10, 'bold'),
+            attachments_container,
+            text=f"📁 Attachments ({len(attachments)})",
+            font=('Arial', 14, 'bold'),
             fg=self.colors['primary'],
             bg=self.colors['background']
-        ).pack(anchor='w', pady=(10, 5))
+        ).pack(anchor='w', pady=(0, 10))
         
-        attachments_frame = tk.Frame(form_container, bg=self.colors['card_bg'], height=150)
+        attachments_frame = tk.Frame(attachments_container, bg=self.colors['card_bg'], height=150)
         attachments_frame.pack(fill=tk.X, pady=(0, 10))
         attachments_frame.pack_propagate(False)
         
@@ -2563,8 +2863,21 @@ class ModernLoginSystem:
         
         def remove_selected_attachment():
             selection = attachments_listbox.curselection()
-            if selection:
-                index = selection[0]
+            if not selection:
+                return
+            
+            index = selection[0]
+            filename = attachments_listbox.get(index)
+            
+            # Show warning dialog
+            response = messagebox.askyesno(
+                "Confirm Removal",
+                f"Are you sure you want to remove '{filename}'?\n\n"
+                "This will remove it from the student record. "
+                "If you save changes, the file will be permanently deleted."
+            )
+            
+            if response:  # User clicked Yes
                 selected_files.pop(index)
                 attachments_listbox.delete(index)
         
@@ -2604,11 +2917,11 @@ class ModernLoginSystem:
             """Update student record in database"""
             try:
                 # Get values
-                id_number = entries['ID Number'].get()
-                first_name = entries['First Name'].get()
-                middle_name = entries['Middle Name'].get()
-                last_name = entries['Last Name'].get()
-                status = entries['Status'].get()  # Changed variable name
+                id_number = id_entry.get()
+                first_name = first_name_entry.get()
+                middle_name = middle_name_entry.get()
+                last_name = last_name_entry.get()
+                status = status_var.get()
                 
                 # Validate required fields
                 if not id_number:
@@ -2629,8 +2942,9 @@ class ModernLoginSystem:
                 so_number = ""
                 date_issued = ""
                 series_year = ""
+                lrn = ""
                 
-                if status == "Graduate":  # Changed condition
+                if status == "Graduate":
                     last_school_year = graduate_entries["Last School Year Attended"]['widget'].get()
                     if last_school_year == "Enter last school year attended":
                         last_school_year = ""
@@ -2650,6 +2964,10 @@ class ModernLoginSystem:
                     series_year = graduate_entries["Series of Year"]['widget'].get()
                     if series_year == "Enter series of year":
                         series_year = ""
+                    
+                    lrn = graduate_entries["LRN (Learner Reference Number)"]['widget'].get()
+                    if lrn == "Enter LRN":
+                        lrn = ""
                 
                 # Create title from name
                 title = f"{first_name} {last_name} ({id_number})"
@@ -2687,18 +3005,18 @@ class ModernLoginSystem:
                             shutil.copy2(file_path, dest_path)
                             saved_attachments.append(dest_path)
                 
-                # Update database
+                # Update database (WITH LRN)
                 self.cursor.execute('''
                     UPDATE credentials 
                     SET title = ?, username = ?, password = ?, attachments = ?, 
                         category = ?, first_name = ?, middle_name = ?, 
                         last_name = ?, last_school_year = ?, contact_number = ?,
-                        so_number = ?, date_issued = ?, series_year = ?,
+                        so_number = ?, date_issued = ?, series_year = ?, lrn = ?,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = ? AND owner_id = ?
                 ''', (title, id_number, first_name, json.dumps(saved_attachments), 
-                      status, first_name, middle_name, last_name,  # Changed variable
-                      last_school_year, contact_number, so_number, date_issued, series_year,
+                      status, first_name, middle_name, last_name,
+                      last_school_year, contact_number, so_number, date_issued, series_year, lrn,
                       cred_id_db, self.current_user))
                 self.conn.commit()
                 
@@ -2709,13 +3027,17 @@ class ModernLoginSystem:
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to update student record: {str(e)}")
         
-        # Button container
+        # Button container - Full width
         button_container = tk.Frame(scrollable_frame, bg=self.colors['background'])
-        button_container.pack(fill=tk.X, pady=30)
+        button_container.pack(fill=tk.X, pady=30, padx=min(50, int(dialog_width * 0.1)))
         
+        # Button container for centering
+        center_frame = tk.Frame(button_container, bg=self.colors['background'])
+        center_frame.pack(pady=20)
+
         # Update button
         update_btn = tk.Button(
-            button_container,
+            center_frame,
             text="💾 Update Student Record",
             command=update_credential,
             font=('Arial', 12, 'bold'),
@@ -2724,26 +3046,28 @@ class ModernLoginSystem:
             bd=0,
             padx=30,
             pady=10,
-            cursor='hand2'
+            cursor='hand2',
+            width=20  # Fixed width for consistent size
         )
-        update_btn.pack(pady=10)
-        update_btn.bind('<Enter>', lambda e: update_btn.config(bg=self.colors['secondary']))
+        update_btn.pack(side=tk.LEFT, padx=(0, 10))
+        update_btn.bind('<Enter>', lambda e: update_btn.config(bg='#d90429'))
         update_btn.bind('<Leave>', lambda e: update_btn.config(bg=self.colors['primary']))
-        
+
         # Cancel button
         cancel_btn = tk.Button(
-            button_container,
+            center_frame,
             text="Cancel",
             command=dialog.destroy,
-            font=('Arial', 10),
+            font=('Arial', 12, 'bold'),  # Same font size
             bg=self.colors['danger'],
             fg='white',
             bd=0,
-            padx=20,
-            pady=8,
-            cursor='hand2'
+            padx=30,  # Same padding
+            pady=10,  # Same padding
+            cursor='hand2',
+            width=20  # Same fixed width
         )
-        cancel_btn.pack(pady=5)
+        cancel_btn.pack(side=tk.LEFT)
         cancel_btn.bind('<Enter>', lambda e: cancel_btn.config(bg='#d90429'))
         cancel_btn.bind('<Leave>', lambda e: cancel_btn.config(bg=self.colors['danger']))
         
@@ -2754,8 +3078,378 @@ class ModernLoginSystem:
         # Update immediately
         configure_scrollregion()
     
+    def open_attachment_viewer(self, filepath):
+        """Open attachment in a dedicated viewer window"""
+        if not os.path.exists(filepath):
+            messagebox.showerror("Error", "File not found!")
+            return
+        
+        viewer = tk.Toplevel(self.root)
+        viewer.title(f"Viewer: {os.path.basename(filepath)}")
+        
+        # Set size based on file type
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        viewer.geometry(f"{int(screen_width * 0.7)}x{int(screen_height * 0.8)}")
+        viewer.configure(bg=self.colors['background'])
+        
+        # Center the viewer
+        viewer.update_idletasks()
+        x = (screen_width // 2) - (viewer.winfo_width() // 2)
+        y = (screen_height // 2) - (viewer.winfo_height() // 2)
+        viewer.geometry(f'+{x}+{y}')
+        
+        # Header
+        header_frame = tk.Frame(viewer, bg=self.colors['primary'], height=50)
+        header_frame.pack(fill=tk.X)
+        header_frame.pack_propagate(False)
+        
+        tk.Label(
+            header_frame,
+            text=os.path.basename(filepath),
+            font=('Arial', 12, 'bold'),
+            fg='white',
+            bg=self.colors['primary']
+        ).pack(side=tk.LEFT, padx=20, pady=10)
+        
+        # Close button in header
+        close_btn = tk.Button(
+            header_frame,
+            text="✕",
+            command=viewer.destroy,
+            font=('Arial', 12, 'bold'),
+            bg='transparent',
+            fg='white',
+            bd=0,
+            cursor='hand2'
+        )
+        close_btn.pack(side=tk.RIGHT, padx=20)
+        
+        # Content area
+        content_frame = tk.Frame(viewer, bg=self.colors['background'])
+        content_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        
+        # Check file type
+        if filepath.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp')):
+            try:
+                # Display image
+                img = Image.open(filepath)
+                
+                # Calculate display size (fit to window)
+                display_width = int(screen_width * 0.6)
+                display_height = int(screen_height * 0.6)
+                
+                # Maintain aspect ratio
+                img_ratio = img.width / img.height
+                display_ratio = display_width / display_height
+                
+                if img_ratio > display_ratio:
+                    # Width is the limiting factor
+                    new_width = display_width
+                    new_height = int(display_width / img_ratio)
+                else:
+                    # Height is the limiting factor
+                    new_height = display_height
+                    new_width = int(display_height * img_ratio)
+                
+                img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                photo = ImageTk.PhotoImage(img)
+                
+                img_label = tk.Label(content_frame, image=photo, bg=self.colors['background'])
+                img_label.image = photo
+                img_label.pack(expand=True)
+                
+            except Exception as e:
+                tk.Label(
+                    content_frame,
+                    text=f"Cannot display image:\n{str(e)}",
+                    font=('Arial', 11),
+                    fg=self.colors['danger'],
+                    bg=self.colors['background']
+                ).pack(expand=True)
+        
+        elif filepath.lower().endswith('.pdf'):
+            # For PDF files, show info and open button
+            tk.Label(
+                content_frame,
+                text="📄 PDF Document",
+                font=('Arial', 48),
+                fg=self.colors['primary'],
+                bg=self.colors['background']
+            ).pack(pady=50)
+            
+            tk.Label(
+                content_frame,
+                text=os.path.basename(filepath),
+                font=('Arial', 14),
+                fg=self.colors['dark'],
+                bg=self.colors['background']
+            ).pack(pady=10)
+            
+            btn_frame = tk.Frame(content_frame, bg=self.colors['background'])
+            btn_frame.pack(pady=20)
+            
+            tk.Button(
+                btn_frame,
+                text="🖨️ Print PDF",
+                command=lambda: self.print_file(filepath),
+                font=('Arial', 11, 'bold'),
+                bg=self.colors['primary'],
+                fg='white',
+                bd=0,
+                padx=20,
+                pady=10,
+                cursor='hand2'
+            ).pack(side=tk.LEFT, padx=(0, 10))
+            
+            tk.Button(
+                btn_frame,
+                text="📂 Open in System",
+                command=lambda: self.open_file(filepath),
+                font=('Arial', 11),
+                bg=self.colors['info'],
+                fg='white',
+                bd=0,
+                padx=20,
+                pady=10,
+                cursor='hand2'
+            ).pack(side=tk.LEFT)
+        
+        else:
+            # For other file types
+            tk.Label(
+                content_frame,
+                text="📄 Document",
+                font=('Arial', 48),
+                fg=self.colors['primary'],
+                bg=self.colors['background']
+            ).pack(pady=50)
+            
+            tk.Label(
+                content_frame,
+                text=f"File: {os.path.basename(filepath)}",
+                font=('Arial', 12),
+                fg=self.colors['dark'],
+                bg=self.colors['background']
+            ).pack(pady=5)
+            
+            # File info
+            try:
+                file_size = os.path.getsize(filepath)
+                file_size_str = f"{file_size / 1024:.1f} KB" if file_size < 1024*1024 else f"{file_size / (1024*1024):.1f} MB"
+                
+                tk.Label(
+                    content_frame,
+                    text=f"Size: {file_size_str}",
+                    font=('Arial', 10),
+                    fg=self.colors['text'],
+                    bg=self.colors['background']
+                ).pack(pady=5)
+            except:
+                pass
+            
+            tk.Button(
+                content_frame,
+                text="📂 Open File",
+                command=lambda: self.open_file(filepath),
+                font=('Arial', 12, 'bold'),
+                bg=self.colors['primary'],
+                fg='white',
+                bd=0,
+                padx=30,
+                pady=12,
+                cursor='hand2'
+            ).pack(pady=30)
+
+    def print_file(self, filepath):
+        """Print a file using system print dialog"""
+        if not os.path.exists(filepath):
+            messagebox.showerror("Error", "File not found!")
+            return
+        
+        try:
+            # For Windows
+            if os.name == 'nt':
+                os.startfile(filepath, "print")
+            # For macOS
+            elif sys.platform == 'darwin':
+                subprocess.run(['lp', filepath])
+            # For Linux
+            else:
+                subprocess.run(['lp', filepath])
+            
+            messagebox.showinfo("Print", f"Printing: {os.path.basename(filepath)}")
+        except Exception as e:
+            messagebox.showerror("Print Error", f"Cannot print file:\n{str(e)}")
+
+    def print_tkinter_frame(self, frame, title="Document"):
+        """Print a Tkinter frame as PDF"""
+        try:
+            # Ask for save location
+            file_path = filedialog.asksaveasfilename(
+                defaultextension=".pdf",
+                filetypes=[("PDF files", "*.pdf")],
+                initialfile=f"{title}_{datetime.now().strftime('%Y%m%d')}.pdf"
+            )
+            
+            if not file_path:
+                return
+            
+            # Create PDF document
+            doc = SimpleDocTemplate(file_path, pagesize=A4)
+            elements = []
+            
+            # Get styles
+            styles = getSampleStyleSheet()
+            
+            # Add title
+            title_style = ParagraphStyle(
+                'Title',
+                parent=styles['Heading1'],
+                fontSize=16,
+                textColor=colors.HexColor('#800000'),
+                spaceAfter=20
+            )
+            
+            title_para = Paragraph(f"Student Record: {title}", title_style)
+            elements.append(title_para)
+            
+            # Add generation date
+            date_style = ParagraphStyle(
+                'Date',
+                parent=styles['Normal'],
+                fontSize=10,
+                textColor=colors.HexColor('#666666'),
+                spaceAfter=30
+            )
+            
+            date_para = Paragraph(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", date_style)
+            elements.append(date_para)
+            
+            # Build PDF
+            doc.build(elements)
+            
+            messagebox.showinfo("Success", f"PDF saved to:\n{file_path}")
+            
+        except Exception as e:
+            messagebox.showerror("Print Error", f"Cannot create PDF:\n{str(e)}")
+
+    def print_all_attachments(self, attachments, title):
+        """Print all attachments for a student"""
+        if not attachments:
+            messagebox.showwarning("No Attachments", "No attachments to print")
+            return
+        
+        # Create a simple interface to select which attachments to print
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Print Attachments")
+        dialog.geometry("400x300")
+        dialog.configure(bg=self.colors['background'])
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        # Center dialog
+        dialog.update_idletasks()
+        x = (self.root.winfo_screenwidth() // 2) - (400 // 2)
+        y = (self.root.winfo_screenheight() // 2) - (300 // 2)
+        dialog.geometry(f'400x300+{x}+{y}')
+        
+        tk.Label(
+            dialog,
+            text=f"Print attachments for:\n{title}",
+            font=('Arial', 12, 'bold'),
+            fg=self.colors['primary'],
+            bg=self.colors['background']
+        ).pack(pady=(20, 10))
+        
+        tk.Label(
+            dialog,
+            text="Select attachments to print:",
+            font=('Arial', 10),
+            fg=self.colors['text'],
+            bg=self.colors['background']
+        ).pack(pady=(0, 10))
+        
+        # Create listbox with checkboxes
+        listbox_frame = tk.Frame(dialog, bg=self.colors['background'])
+        listbox_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+        
+        scrollbar = ttk.Scrollbar(listbox_frame)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        attachments_listbox = tk.Listbox(
+            listbox_frame,
+            selectmode=tk.MULTIPLE,
+            yscrollcommand=scrollbar.set,
+            font=('Arial', 10),
+            bg='white',
+            height=8
+        )
+        attachments_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.config(command=attachments_listbox.yview)
+        
+        # Add attachments to listbox
+        for attachment in attachments:
+            filename = os.path.basename(attachment)
+            attachments_listbox.insert(tk.END, filename)
+        
+        # Select all by default
+        for i in range(len(attachments)):
+            attachments_listbox.selection_set(i)
+        
+        def print_selected():
+            selected_indices = attachments_listbox.curselection()
+            if not selected_indices:
+                messagebox.showwarning("No Selection", "Please select attachments to print")
+                return
+            
+            selected_attachments = [attachments[i] for i in selected_indices]
+            
+            # Print each selected attachment
+            success_count = 0
+            for attachment in selected_attachments:
+                if os.path.exists(attachment):
+                    try:
+                        self.print_file(attachment)
+                        success_count += 1
+                    except:
+                        pass
+            
+            dialog.destroy()
+            messagebox.showinfo("Print Complete", f"Successfully sent {success_count} of {len(selected_attachments)} files to printer")
+        
+        # Button frame
+        button_frame = tk.Frame(dialog, bg=self.colors['background'])
+        button_frame.pack(fill=tk.X, padx=20, pady=(0, 20))
+        
+        tk.Button(
+            button_frame,
+            text="🖨️ Print Selected",
+            command=print_selected,
+            font=('Arial', 10, 'bold'),
+            bg=self.colors['primary'],
+            fg='white',
+            bd=0,
+            padx=20,
+            pady=8,
+            cursor='hand2'
+        ).pack(side=tk.LEFT, padx=(0, 10))
+        
+        tk.Button(
+            button_frame,
+            text="Cancel",
+            command=dialog.destroy,
+            font=('Arial', 10),
+            bg=self.colors['danger'],
+            fg='white',
+            bd=0,
+            padx=20,
+            pady=8,
+            cursor='hand2'
+        ).pack(side=tk.LEFT)
+    
     def view_credential(self):
-        """View selected student record details with image display"""
+        """View selected student record details with improved layout and printable format"""
         selection = self.cred_tree.selection()
         if not selection:
             messagebox.showwarning("No Selection", "Please select a student record to view")
@@ -2764,10 +3458,10 @@ class ModernLoginSystem:
         item = self.cred_tree.item(selection[0])
         cred_id = item['values'][0]
         
-        # Get student record details from database
+        # Get student record details from database (WITH LRN)
         self.cursor.execute('''
             SELECT title, username, password, attachments, category, first_name, middle_name, last_name, created_at, updated_at, 
-                   last_school_year, contact_number, so_number, date_issued, series_year
+                last_school_year, contact_number, so_number, date_issued, series_year, lrn
             FROM credentials 
             WHERE id = ? AND owner_id = ?
         ''', (cred_id, self.current_user))
@@ -2777,7 +3471,8 @@ class ModernLoginSystem:
             messagebox.showerror("Error", "Student record not found")
             return
         
-        title, id_number, first_name, attachments_json, status, fname, mname, lname, created_at, updated_at, last_school_year, contact_number, so_number, date_issued, series_year = cred  # Changed variable name
+        # Unpack with LRN
+        title, id_number, first_name, attachments_json, status, fname, mname, lname, created_at, updated_at, last_school_year, contact_number, so_number, date_issued, series_year, lrn = cred
         
         # Parse attachments
         try:
@@ -2788,106 +3483,373 @@ class ModernLoginSystem:
         # Create view dialog
         dialog = tk.Toplevel(self.root)
         dialog.title(f"Student Record: {title}")
-        dialog.geometry("800x750")  # Adjusted size
+        
+        # Get screen dimensions
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        
+        # Calculate dialog size (90% of screen, but max 1000x850)
+        dialog_width = min(int(screen_width * 0.9), 1000)
+        dialog_height = min(int(screen_height * 0.9), 850)
+        
+        dialog.geometry(f"{dialog_width}x{dialog_height}")
         dialog.configure(bg=self.colors['background'])
         dialog.transient(self.root)
         dialog.grab_set()
         
-        # Center dialog
+        # Center dialog on screen
         dialog.update_idletasks()
-        x = (self.root.winfo_screenwidth() // 2) - (800 // 2)
-        y = (self.root.winfo_screenheight() // 2) - (750 // 2)
-        dialog.geometry(f'800x750+{x}+{y}')
+        x = (screen_width // 2) - (dialog_width // 2)
+        y = (screen_height // 2) - (dialog_height // 2)
+        dialog.geometry(f'{dialog_width}x{dialog_height}+{x}+{y}')
         
-        # Create a scrollable canvas with responsive width
-        canvas = tk.Canvas(dialog, bg=self.colors['background'])
-        scrollbar = ttk.Scrollbar(dialog, orient="vertical", command=canvas.yview)
-        scrollable_frame = tk.Frame(canvas, bg=self.colors['background'])
+        # Make dialog resizable
+        dialog.resizable(True, True)
         
-        def configure_scrollregion(event=None):
-            if canvas.winfo_exists():
-                canvas.configure(scrollregion=canvas.bbox("all"))
-                # Update canvas width
-                canvas_width = dialog.winfo_width()
+        # Create notebook for tabs
+        notebook = ttk.Notebook(dialog)
+        notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # Tab 1: Student Information
+        info_tab = tk.Frame(notebook, bg=self.colors['background'])
+        notebook.add(info_tab, text="👤 Student Information")
+        
+        # Create a scrollable canvas for info tab
+        info_canvas = tk.Canvas(info_tab, bg=self.colors['background'])
+        info_scrollbar = ttk.Scrollbar(info_tab, orient="vertical", command=info_canvas.yview)
+        info_scrollable_frame = tk.Frame(info_canvas, bg=self.colors['background'])
+        info_scrollable_frame.pack(fill="both", expand=True)
+        
+        def configure_info_scrollregion(event=None):
+            if info_canvas.winfo_exists():
+                info_canvas.configure(scrollregion=info_canvas.bbox("all"))
+                canvas_width = info_tab.winfo_width()
                 if canvas_width > 1:
-                    canvas.itemconfig(canvas_window, width=canvas_width)
+                    info_canvas.itemconfig(info_window, width=canvas_width-20)
         
-        scrollable_frame.bind("<Configure>", configure_scrollregion)
+        info_scrollable_frame.bind("<Configure>", configure_info_scrollregion)
         
-        canvas_window = canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
+        info_window = info_canvas.create_window((0, 0), window=info_scrollable_frame, anchor="nw")
+        info_canvas.configure(yscrollcommand=info_scrollbar.set)
         
-        # Bind dialog resize
-        dialog.bind("<Configure>", configure_scrollregion)
-        
-        # Title - CENTERED
+        # Title
         tk.Label(
-            scrollable_frame,
-            text=f"👨‍🎓 {title}",
-            font=('Arial', 20, 'bold'),
+            info_scrollable_frame,
+            text=f"👨‍🎓 Student Record",
+            font=('Arial', 22, 'bold'),
             fg=self.colors['primary'],
             bg=self.colors['background']
-        ).pack(pady=(20, 5), anchor='center', expand=True, fill='x')
+        ).pack(pady=(20, 10))
         
         tk.Label(
-            scrollable_frame,
-            text=f"Status: {status} | Attachments: {len(attachments)}",  # Changed text
-            font=('Arial', 11),
-            fg=self.colors['text'],
+            info_scrollable_frame,
+            text=title,
+            font=('Arial', 18),
+            fg=self.colors['dark'],
             bg=self.colors['background']
-        ).pack(anchor='center')
+        ).pack(pady=(0, 20))
         
-        # Details frame
-        details_frame = tk.Frame(scrollable_frame, bg=self.colors['card_bg'], padx=20, pady=20)
-        details_frame.pack(fill=tk.BOTH, expand=True, padx=30, pady=20)
+        # Create a printable frame
+        printable_frame = tk.Frame(info_scrollable_frame, bg='white', relief='solid', bd=2, padx=30, pady=25)
+        printable_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
         
-        # Display attachments if they exist
+        # Header with school info
+        header_frame = tk.Frame(printable_frame, bg='white')
+        header_frame.pack(fill=tk.X, pady=(0, 20))
+        
+        # School logo (if exists)
+        if self.spc_logo:
+            logo_label = tk.Label(header_frame, image=self.spc_logo, bg='white')
+            logo_label.pack(side=tk.LEFT, padx=(0, 20))
+        
+        # School info
+        school_info = tk.Frame(header_frame, bg='white')
+        school_info.pack(side=tk.LEFT, fill=tk.Y)
+        
+        tk.Label(
+            school_info,
+            text="ST. PETER'S COLLEGE",
+            font=('Arial', 16, 'bold'),
+            fg=self.colors['primary'],
+            bg='white'
+        ).pack(anchor='w')
+        
+        tk.Label(
+            school_info,
+            text="Iligan City",
+            font=('Arial', 12),
+            fg=self.colors['dark'],
+            bg='white'
+        ).pack(anchor='w', pady=(2, 0))
+        
+        tk.Label(
+            school_info,
+            text="Student Records System",
+            font=('Arial', 10),
+            fg=self.colors['text'],
+            bg='white'
+        ).pack(anchor='w', pady=(5, 0))
+        
+        # Current date
+        tk.Label(
+            header_frame,
+            text=f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+            font=('Arial', 9),
+            fg=self.colors['text'],
+            bg='white'
+        ).pack(side=tk.RIGHT, anchor='ne')
+        
+        # Divider line
+        tk.Frame(printable_frame, bg=self.colors['primary'], height=2).pack(fill=tk.X, pady=10)
+        
+        # Student information in a clean grid layout
+        info_grid = tk.Frame(printable_frame, bg='white')
+        info_grid.pack(fill=tk.BOTH, expand=True, pady=10)
+        
+        # Define fields for display
+        basic_fields = [
+            ("📋 ID Number:", id_number, "bold"),
+            ("👤 First Name:", first_name, "normal"),
+            ("👥 Middle Name:", mname if mname else "N/A", "normal"),
+            ("👤 Last Name:", lname, "normal"),
+            ("📊 Status:", status, "bold"),
+            ("📅 Created Date:", created_at[:10] if created_at else "N/A", "normal"),
+            ("🔄 Last Updated:", updated_at[:10] if updated_at else "N/A", "normal")
+        ]
+        
+        # Add graduate-specific fields if status is Graduate
+        graduate_fields = []
+        if status == 'Graduate':
+            graduate_fields = [
+                ("🎓 Last School Year Attended:", last_school_year if last_school_year else "N/A", "normal"),
+                ("📱 Contact Number:", contact_number if contact_number else "N/A", "normal"),
+                ("📋 SO Number:", so_number if so_number else "N/A", "normal"),
+                ("📅 Date Issued:", date_issued if date_issued else "N/A", "normal"),
+                ("📊 Series of Year:", series_year if series_year else "N/A", "normal"),
+                ("🔢 LRN:", lrn if lrn else "N/A", "normal")
+            ]
+        
+        all_fields = basic_fields + graduate_fields
+        
+        # Display fields in a clean grid
+        for i, (label_text, value, font_weight) in enumerate(all_fields):
+            row = i // 2
+            col = (i % 2) * 2
+            
+            # Create frame for each field
+            field_frame = tk.Frame(info_grid, bg='white')
+            field_frame.grid(row=row, column=col, columnspan=2, sticky='w', padx=10, pady=8)
+            
+            # Label
+            tk.Label(
+                field_frame,
+                text=label_text,
+                font=('Arial', 10, font_weight),
+                fg=self.colors['primary'],
+                bg='white',
+                anchor='w'
+            ).pack(side=tk.LEFT)
+            
+            # Value with slightly different styling
+            tk.Label(
+                field_frame,
+                text=value,
+                font=('Arial', 11, 'bold' if font_weight == 'bold' else 'normal'),
+                fg=self.colors['dark'],
+                bg='white',
+                anchor='w'
+            ).pack(side=tk.LEFT, padx=(5, 0))
+        
+        # Divider line before attachments
+        tk.Frame(printable_frame, bg=self.colors['light'], height=1).pack(fill=tk.X, pady=20)
+        
+        # Attachments section
+        attachments_label = tk.Label(
+            printable_frame,
+            text=f"📁 Attachments ({len(attachments)})",
+            font=('Arial', 12, 'bold'),
+            fg=self.colors['primary'],
+            bg='white'
+        )
+        attachments_label.pack(anchor='w', pady=(0, 10))
+        
         if attachments:
-            # Create a frame for attachments
-            attachments_frame = tk.Frame(details_frame, bg=self.colors['card_bg'])
+            attachments_frame = tk.Frame(printable_frame, bg='white')
             attachments_frame.pack(fill=tk.X, pady=(0, 20))
             
+            for i, attachment in enumerate(attachments):
+                if os.path.exists(attachment):
+                    # Create frame for each attachment
+                    att_frame = tk.Frame(attachments_frame, bg='white', relief='solid', bd=1)
+                    att_frame.pack(fill=tk.X, padx=5, pady=5)
+                    
+                    # Attachment info
+                    filename = os.path.basename(attachment)
+                    filesize = os.path.getsize(attachment) if os.path.exists(attachment) else 0
+                    filesize_str = f"{filesize / 1024:.1f} KB" if filesize > 0 else "Unknown size"
+                    
+                    tk.Label(
+                        att_frame,
+                        text=f"📄 {filename}",
+                        font=('Arial', 10),
+                        fg=self.colors['dark'],
+                        bg='white',
+                        anchor='w'
+                    ).pack(side=tk.LEFT, padx=10, pady=5)
+                    
+                    tk.Label(
+                        att_frame,
+                        text=f"({filesize_str})",
+                        font=('Arial', 9),
+                        fg=self.colors['text'],
+                        bg='white',
+                        anchor='w'
+                    ).pack(side=tk.LEFT, padx=5, pady=5)
+                    
+                    # Action buttons for each attachment (REMOVED VIEW BUTTON)
+                    btn_frame = tk.Frame(att_frame, bg='white')
+                    btn_frame.pack(side=tk.RIGHT, padx=10, pady=5)
+                    
+                    # Print button (for images/PDFs)
+                    if attachment.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.pdf')):
+                        print_btn = tk.Button(
+                            btn_frame,
+                            text="🖨️ Print",
+                            command=lambda path=attachment: self.print_file(path),
+                            font=('Arial', 8),
+                            bg=self.colors['success'],
+                            fg='white',
+                            bd=0,
+                            padx=10,
+                            pady=2,
+                            cursor='hand2'
+                        )
+                        print_btn.pack(side=tk.LEFT, padx=(0, 5))
+                        print_btn.bind('<Enter>', lambda e, b=print_btn: b.config(bg='#218838'))
+                        print_btn.bind('<Leave>', lambda e, b=print_btn: b.config(bg=self.colors['success']))
+                    
+                    # Open in system button
+                    system_btn = tk.Button(
+                        btn_frame,
+                        text="📂 Open",
+                        command=lambda path=attachment: self.open_file(path),
+                        font=('Arial', 8),
+                        bg=self.colors['warning'],
+                        fg='white',
+                        bd=0,
+                        padx=10,
+                        pady=2,
+                        cursor='hand2'
+                    )
+                    system_btn.pack(side=tk.LEFT)
+                    system_btn.bind('<Enter>', lambda e, b=system_btn: b.config(bg='#e0a800'))
+                    system_btn.bind('<Leave>', lambda e, b=system_btn: b.config(bg=self.colors['warning']))
+        else:
             tk.Label(
-                attachments_frame,
-                text=f"📁 Attachments ({len(attachments)}):",
-                font=('Arial', 12, 'bold'),
+                printable_frame,
+                text="No attachments available",
+                font=('Arial', 10, 'italic'),
+                fg=self.colors['text'],
+                bg='white'
+            ).pack(pady=10)
+        
+        # Footer for the printable frame
+        footer_frame = tk.Frame(printable_frame, bg='white')
+        footer_frame.pack(fill=tk.X, pady=(20, 0))
+        
+        tk.Label(
+            footer_frame,
+            text="This document is generated from St. Peter's College Student Records System",
+            font=('Arial', 9),
+            fg=self.colors['text'],
+            bg='white'
+        ).pack(side=tk.LEFT)
+        
+        # Print this frame button
+        print_frame_btn = tk.Button(
+            footer_frame,
+            text="🖨️ Print This Record",
+            command=lambda: self.print_tkinter_frame(printable_frame, f"Student_Record_{id_number}"),
+            font=('Arial', 9, 'bold'),
+            bg=self.colors['primary'],
+            fg='white',
+            bd=0,
+            padx=15,
+            pady=5,
+            cursor='hand2'
+        )
+        print_frame_btn.pack(side=tk.RIGHT)
+        print_frame_btn.bind('<Enter>', lambda e: print_frame_btn.config(bg=self.colors['secondary']))
+        print_frame_btn.bind('<Leave>', lambda e: print_frame_btn.config(bg=self.colors['primary']))
+        
+        # Pack canvas and scrollbar for info tab
+        info_canvas.pack(side="left", fill="both", expand=True)
+        info_scrollbar.pack(side="right", fill="y")
+        
+        # Tab 2: Attachments Gallery
+        if attachments:
+            gallery_tab = tk.Frame(notebook, bg=self.colors['background'])
+            notebook.add(gallery_tab, text="📁 Attachments Gallery")
+            
+            # Create scrollable gallery
+            gallery_canvas = tk.Canvas(gallery_tab, bg=self.colors['background'])
+            gallery_scrollbar = ttk.Scrollbar(gallery_tab, orient="vertical", command=gallery_canvas.yview)
+            gallery_scrollable_frame = tk.Frame(gallery_canvas, bg=self.colors['background'])
+            gallery_scrollable_frame.pack(fill="both", expand=True)
+            
+            def configure_gallery_scrollregion(event=None):
+                if gallery_canvas.winfo_exists():
+                    gallery_canvas.configure(scrollregion=gallery_canvas.bbox("all"))
+                    canvas_width = gallery_tab.winfo_width()
+                    if canvas_width > 1:
+                        gallery_canvas.itemconfig(gallery_window, width=canvas_width-20)
+            
+            gallery_scrollable_frame.bind("<Configure>", configure_gallery_scrollregion)
+            
+            gallery_window = gallery_canvas.create_window((0, 0), window=gallery_scrollable_frame, anchor="nw")
+            gallery_canvas.configure(yscrollcommand=gallery_scrollbar.set)
+            
+            # Gallery header
+            tk.Label(
+                gallery_scrollable_frame,
+                text="📁 Attachments Gallery",
+                font=('Arial', 18, 'bold'),
                 fg=self.colors['primary'],
-                bg=self.colors['card_bg']
-            ).pack(anchor='center', pady=(0, 10))
+                bg=self.colors['background']
+            ).pack(pady=(20, 10))
             
-            # Create a canvas for horizontal scrolling of images
-            images_canvas = tk.Canvas(attachments_frame, bg=self.colors['card_bg'], height=220)
-            images_scrollbar = ttk.Scrollbar(attachments_frame, orient="horizontal", command=images_canvas.xview)
-            images_inner_frame = tk.Frame(images_canvas, bg=self.colors['card_bg'])
+            tk.Label(
+                gallery_scrollable_frame,
+                text=f"Total attachments: {len(attachments)}",
+                font=('Arial', 11),
+                fg=self.colors['text'],
+                bg=self.colors['background']
+            ).pack(pady=(0, 20))
             
-            images_canvas.create_window((0, 0), window=images_inner_frame, anchor="nw")
-            images_canvas.configure(xscrollcommand=images_scrollbar.set)
+            # Create a grid for images
+            image_grid = tk.Frame(gallery_scrollable_frame, bg=self.colors['background'])
+            image_grid.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
             
-            # Function to configure canvas
-            def configure_images_canvas(e):
-                if images_canvas.winfo_exists():
-                    images_canvas.configure(scrollregion=images_canvas.bbox("all"))
-            
-            images_inner_frame.bind("<Configure>", configure_images_canvas)
-            
-            # Load and display images
+            # Load and display all images
             image_widgets = []
-            image_paths = []
-            
-            for i, attachment_path in enumerate(attachments):
-                if os.path.exists(attachment_path):
-                    # Create frame for each image
-                    img_frame = tk.Frame(images_inner_frame, bg=self.colors['card_bg'], relief='solid', bd=1)
-                    img_frame.grid(row=0, column=i, padx=10, pady=5, sticky='nw')
+            for i, attachment in enumerate(attachments):
+                if os.path.exists(attachment):
+                    # Calculate grid position
+                    row = i // 3
+                    col = i % 3
+                    
+                    # Frame for each image
+                    img_frame = tk.Frame(image_grid, bg='white', relief='solid', bd=1)
+                    img_frame.grid(row=row, column=col, padx=10, pady=10, sticky='nw')
                     
                     # Check if it's an image file
-                    if attachment_path.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp')):
+                    if attachment.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp')):
                         try:
                             # Open and resize the image
-                            img = Image.open(attachment_path)
+                            img = Image.open(attachment)
                             
-                            # Calculate new dimensions (max 200x200 while maintaining aspect ratio)
-                            max_size = (200, 200)
+                            # Calculate new dimensions (max 250x250 while maintaining aspect ratio)
+                            max_size = (250, 250)
                             img.thumbnail(max_size, Image.Resampling.LANCZOS)
                             
                             # Convert to PhotoImage
@@ -2897,10 +3859,14 @@ class ModernLoginSystem:
                             img_label = tk.Label(
                                 img_frame,
                                 image=photo,
-                                bg='white'
+                                bg='white',
+                                cursor='hand2'
                             )
                             img_label.image = photo  # Keep a reference
-                            img_label.pack(pady=5)
+                            img_label.pack(pady=10)
+                            
+                            # Click to open the image
+                            img_label.bind('<Button-1>', lambda e, path=attachment: self.open_file(path))
                             
                             image_widgets.append(photo)
                             
@@ -2910,21 +3876,25 @@ class ModernLoginSystem:
                                 img_frame,
                                 text="📄",
                                 font=('Arial', 48),
-                                bg='white'
+                                bg='white',
+                                cursor='hand2'
                             )
-                            img_label.pack(pady=5)
+                            img_label.pack(pady=10)
+                            img_label.bind('<Button-1>', lambda e, path=attachment: self.open_file(path))
                     else:
                         # For non-image files, show file icon
                         img_label = tk.Label(
                             img_frame,
                             text="📄",
                             font=('Arial', 48),
-                            bg='white'
+                            bg='white',
+                            cursor='hand2'
                         )
-                        img_label.pack(pady=5)
+                        img_label.pack(pady=10)
+                        img_label.bind('<Button-1>', lambda e, path=attachment: self.open_file(path))
                     
                     # File name label
-                    filename = os.path.basename(attachment_path)
+                    filename = os.path.basename(attachment)
                     if len(filename) > 20:
                         filename = filename[:17] + "..."
                     
@@ -2932,148 +3902,90 @@ class ModernLoginSystem:
                         img_frame,
                         text=filename,
                         font=('Arial', 9),
-                        bg=self.colors['card_bg'],
-                        wraplength=180
-                    ).pack(pady=(0, 5))
+                        bg='white',
+                        fg=self.colors['dark'],
+                        wraplength=200
+                    ).pack(pady=(0, 10))
+                    
+                    # Action buttons (REMOVED VIEW BUTTON)
+                    btn_frame = tk.Frame(img_frame, bg='white')
+                    btn_frame.pack(pady=(0, 10))
+                    
+                    # Print button (for images/PDFs)
+                    if attachment.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.pdf')):
+                        print_btn = tk.Button(
+                            btn_frame,
+                            text="Print",
+                            command=lambda path=attachment: self.print_file(path),
+                            font=('Arial', 8),
+                            bg=self.colors['success'],
+                            fg='white',
+                            bd=0,
+                            padx=10,
+                            pady=2,
+                            cursor='hand2'
+                        )
+                        print_btn.pack(side=tk.LEFT, padx=(0, 5))
                     
                     # Open button
                     open_btn = tk.Button(
-                        img_frame,
+                        btn_frame,
                         text="Open",
-                        command=lambda path=attachment_path: self.open_file(path),
+                        command=lambda path=attachment: self.open_file(path),
                         font=('Arial', 8),
-                        bg=self.colors['info'],
+                        bg=self.colors['warning'],
                         fg='white',
                         bd=0,
                         padx=10,
                         pady=2,
                         cursor='hand2'
                     )
-                    open_btn.pack(pady=(0, 5))
-                    open_btn.bind('<Enter>', lambda e, b=open_btn: b.config(bg=self.colors['primary']))
-                    open_btn.bind('<Leave>', lambda e, b=open_btn: b.config(bg=self.colors['info']))
-                    
-                    image_paths.append(attachment_path)
-                else:
-                    # File doesn't exist
-                    tk.Label(
-                        images_inner_frame,
-                        text=f"⚠️ File not found: {os.path.basename(attachment_path)}",
-                        font=('Arial', 9),
-                        fg=self.colors['warning'],
-                        bg=self.colors['card_bg']
-                    ).grid(row=0, column=i, padx=10, pady=5, sticky='w')
+                    open_btn.pack(side=tk.LEFT)
             
-            if image_paths:
-                images_canvas.pack(fill=tk.X, expand=True)
-                images_scrollbar.pack(fill=tk.X)
-        else:
-            # No attachments
-            tk.Label(
-                details_frame,
-                text="📁 No attachments",
-                font=('Arial', 10),
-                fg=self.colors['text'],
-                bg=self.colors['card_bg']
-            ).pack(pady=(0, 20), anchor='center')
+            # Pack canvas and scrollbar for gallery tab
+            gallery_canvas.pack(side="left", fill="both", expand=True)
+            gallery_scrollbar.pack(side="right", fill="y")
         
-        # Student information in a grid layout
-        info_frame = tk.Frame(details_frame, bg=self.colors['card_bg'])
-        info_frame.pack(fill=tk.X, pady=(10, 0))
-        
-        # Basic fields
-        fields = [
-            ("🆔 ID Number:", id_number),
-            ("👤 First Name:", first_name),
-            ("👥 Middle Name:", mname if mname else "N/A"),
-            ("👤 Last Name:", lname),
-            ("📅 Created:", created_at),
-            ("🔄 Updated:", updated_at)
-        ]
-        
-        # Add graduate-specific fields if status is Graduate
-        if status == 'Graduate':  # Changed condition
-            fields.extend([
-                ("🎓 Last School Year Attended:", last_school_year if last_school_year else "N/A"),
-                ("📱 Contact Number:", contact_number if contact_number else "N/A"),
-                ("📋 SO Number:", so_number if so_number else "N/A"),
-                ("📅 Date Issued:", date_issued if date_issued else "N/A"),
-                ("📊 Series of Year:", series_year if series_year else "N/A")
-            ])
-        
-        for i, (label_text, value) in enumerate(fields):
-            row = i // 2
-            col = (i % 2) * 2
-            
-            # Label
-            tk.Label(
-                info_frame,
-                text=label_text,
-                font=('Arial', 10, 'bold'),
-                fg=self.colors['primary'],
-                bg=self.colors['card_bg'],
-                anchor='w'
-            ).grid(row=row, column=col, sticky='w', padx=(0, 10), pady=5)
-            
-            # Value
-            tk.Label(
-                info_frame,
-                text=value,
-                font=('Arial', 11),
-                fg=self.colors['text'],
-                bg=self.colors['card_bg'],
-                anchor='w'
-            ).grid(row=row, column=col+1, sticky='w', pady=5)
-        
-        # Action buttons frame
-        button_frame = tk.Frame(scrollable_frame, bg=self.colors['background'])
-        button_frame.pack(fill=tk.X, padx=30, pady=(0, 20))
+        # Action buttons at the bottom of dialog
+        action_frame = tk.Frame(dialog, bg=self.colors['background'])
+        action_frame.pack(fill=tk.X, padx=20, pady=10)
         
         action_buttons = [
             ("📋 Copy ID", lambda: self.copy_to_clipboard(id_number)),
-            ("✏️ Edit", lambda: self.edit_credential()),
-            ("📤 Export PDF", lambda: self.export_selected_to_pdf()),
+            ("✏️ Edit Record", lambda: [dialog.destroy(), self.edit_credential()]),
+            ("📤 Export PDF", lambda: [dialog.destroy(), self.export_selected_to_pdf()]),
+            ("🖨️ Print All", lambda: self.print_all_attachments(attachments, title)),
             ("Close", dialog.destroy)
         ]
         
         for btn_text, command in action_buttons:
             btn = tk.Button(
-                button_frame,
+                action_frame,
                 text=btn_text,
                 command=command,
-                font=('Arial', 10),
-                bg=self.colors['primary'] if btn_text == "Close" else 'white',
-                fg='white' if btn_text == "Close" else self.colors['dark'],
+                font=('Arial', 10, 'bold' if btn_text == "Close" else 'normal'),
+                bg=self.colors['primary'] if btn_text == "Close" else self.colors['info'],
+                fg='white',
                 bd=0,
                 padx=15,
                 pady=8,
                 cursor='hand2'
             )
             btn.pack(side=tk.LEFT, padx=(0, 10))
-            btn.bind('<Enter>', lambda e, b=btn, t=btn_text: b.config(bg=self.colors['secondary'] if t == "Close" else self.colors['light']))
-            btn.bind('<Leave>', lambda e, b=btn, t=btn_text: b.config(bg=self.colors['primary'] if t == "Close" else 'white'))
+            btn.bind('<Enter>', lambda e, b=btn, t=btn_text: b.config(bg=self.colors['secondary'] if t == "Close" else self.colors['primary']))
+            btn.bind('<Leave>', lambda e, b=btn, t=btn_text: b.config(bg=self.colors['primary'] if t == "Close" else self.colors['info']))
         
-        # Pack canvas and scrollbar
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-        
-        # Clean up mouse wheel bindings when dialog is closed
+        # Clean up when dialog is closed
         def on_dialog_close():
             dialog.destroy()
-            # Clean up any remaining bindings
-            for canvas_obj, bind_id in self.canvas_bindings[:]:
-                if not canvas_obj.winfo_exists():
-                    try:
-                        canvas_obj.unbind_all("<MouseWheel>")
-                    except:
-                        pass
-                    self.canvas_bindings.remove((canvas_obj, bind_id))
         
         dialog.protocol("WM_DELETE_WINDOW", on_dialog_close)
         
-        # Update immediately
-        configure_scrollregion()
-    
+        # Update scroll regions
+        configure_info_scrollregion()
+        if attachments:
+            configure_gallery_scrollregion()
+
     def open_file(self, filepath):
         """Open a file using the default system application"""
         try:
@@ -3173,6 +4085,9 @@ class ModernLoginSystem:
     # ==========================================================
     def show_settings(self):
         """Show settings page with functional buttons."""
+        # Set active menu to Settings
+        self.set_active_menu(3)
+        
         # Clear main content (except navbar)
         for widget in self.main_content.winfo_children():
             if widget != self.navbar:
@@ -3311,11 +4226,28 @@ class ModernLoginSystem:
         """Popup theme selector and apply theme immediately."""
         dialog = tk.Toplevel(self.root)
         dialog.title("Theme Settings")
-        dialog.geometry("420x360")
-        dialog.resizable(False, False)
+        
+        # Get screen dimensions
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        
+        # Calculate dialog size (40% of screen, but max 450x400)
+        dialog_width = min(int(screen_width * 0.4), 450)
+        dialog_height = min(int(screen_height * 0.5), 400)
+        
+        dialog.geometry(f"{dialog_width}x{dialog_height}")
         dialog.configure(bg="white")
         dialog.transient(self.root)
         dialog.grab_set()
+        
+        # Center dialog
+        dialog.update_idletasks()
+        x = (screen_width // 2) - (dialog_width // 2)
+        y = (screen_height // 2) - (dialog_height // 2)
+        dialog.geometry(f'{dialog_width}x{dialog_height}+{x}+{y}')
+        
+        # Make dialog non-resizable
+        dialog.resizable(False, False)
 
         tk.Label(
             dialog,
@@ -3415,6 +4347,9 @@ class ModernLoginSystem:
     
     def show_help(self):
         """Show help screen"""
+        # Set active menu to Help
+        self.set_active_menu(4)
+        
         # Clear main content (except navbar)
         for widget in self.main_content.winfo_children():
             if widget != self.navbar:
@@ -3461,6 +4396,7 @@ class ModernLoginSystem:
              - SO Number
              - Date Issued
              - Series of Year
+             - LRN (Learner Reference Number)
         
         4. 📁 Attachments
            • Upload images and documents for each student
@@ -3494,16 +4430,28 @@ class ModernLoginSystem:
         """Open change password window"""
         dialog = tk.Toplevel(self.root)
         dialog.title("Change Password")
-        dialog.geometry("400x300")
+        
+        # Get screen dimensions
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        
+        # Calculate dialog size (40% of screen, but max 450x400)
+        dialog_width = min(int(screen_width * 0.4), 450)
+        dialog_height = min(int(screen_height * 0.5), 400)
+        
+        dialog.geometry(f"{dialog_width}x{dialog_height}")
         dialog.configure(bg=self.colors['background'])
         dialog.transient(self.root)
         dialog.grab_set()
         
         # Center dialog
         dialog.update_idletasks()
-        x = (self.root.winfo_screenwidth() // 2) - (400 // 2)
-        y = (self.root.winfo_screenheight() // 2) - (300 // 2)
-        dialog.geometry(f'400x300+{x}+{y}')
+        x = (screen_width // 2) - (dialog_width // 2)
+        y = (screen_height // 2) - (dialog_height // 2)
+        dialog.geometry(f'{dialog_width}x{dialog_height}+{x}+{y}')
+        
+        # Make dialog non-resizable for this simple dialog
+        dialog.resizable(False, False)
         
         tk.Label(
             dialog,
@@ -3625,9 +4573,13 @@ class ModernLoginSystem:
     
     def logout(self):
         """Handle logout"""
+        # Set active menu to Logout
+        self.set_active_menu(5)
+        
         if messagebox.askyesno("Logout", "Are you sure you want to logout?"):
             self.current_user = None
             self.current_role = None
+            self.current_active_menu = None
             self.create_login_screen()
 
 # Run the application
