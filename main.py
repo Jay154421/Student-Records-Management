@@ -141,6 +141,7 @@ class ModernLoginSystem:
                 so_number TEXT,
                 date_issued TEXT,
                 series_year TEXT,
+                lrn TEXT,  -- ✅ ADDED LRN FIELD FOR GRADUATES
                 FOREIGN KEY (owner_id) REFERENCES users (id)
             )
         ''')
@@ -157,7 +158,7 @@ class ModernLoginSystem:
         columns_to_check = [
             'first_name', 'middle_name', 'last_name',
             'last_school_year', 'contact_number', 'so_number', 
-            'date_issued', 'series_year'
+            'date_issued', 'series_year', 'lrn'  # ✅ ADDED LRN TO CHECK
         ]
         for column in columns_to_check:
             try:
@@ -183,15 +184,15 @@ class ModernLoginSystem:
             # Add some sample student records for admin
             admin_id = self.cursor.lastrowid
             sample_students = [
-                ('John Smith (S001)', 'S001', 'John', '[]', 'Undergraduate', 'John', '', 'Smith', admin_id, '', '', '', '', ''),
-                ('Jane Doe (S002)', 'S002', 'Jane', '[]', 'Undergraduate', 'Jane', '', 'Doe', admin_id, '', '', '', '', ''),
-                ('Robert Johnson (S003)', 'S003', 'Robert', '[]', 'Graduate', 'Robert', 'James', 'Johnson', admin_id, '', '', '', '', ''),
+                ('John Smith (S001)', 'S001', 'John', '[]', 'Active', 'John', '', 'Smith', admin_id, '', '', '', '', '', ''),
+                ('Jane Doe (S002)', 'S002', 'Jane', '[]', 'Active', 'Jane', '', 'Doe', admin_id, '', '', '', '', '', ''),
+                ('Robert Johnson (S003)', 'S003', 'Robert', '[]', 'Graduate', 'Robert', 'James', 'Johnson', admin_id, '2022-2023', '09123456789', 'SO-12345', '2023-04-15', '2023', '123456789012'),
             ]
             
             for student in sample_students:
                 self.cursor.execute('''
-                    INSERT INTO credentials (title, username, password, attachments, category, first_name, middle_name, last_name, owner_id, last_school_year, contact_number, so_number, date_issued, series_year)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO credentials (title, username, password, attachments, category, first_name, middle_name, last_name, owner_id, last_school_year, contact_number, so_number, date_issued, series_year, lrn)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', student)
             
             self.conn.commit()
@@ -268,7 +269,7 @@ class ModernLoginSystem:
         # Welcome back text
         welcome_label = tk.Label(
             form_container,
-            text="Welcome Back",
+            text="Welcome!",
             font=('Arial', 32, 'bold'),
             fg=self.colors['primary'],
             bg='white'
@@ -700,7 +701,7 @@ class ModernLoginSystem:
         
         tk.Label(
             welcome_header,
-            text="Dashboard Overview",
+            text="Dashboard",
             font=('Arial', 16, 'bold'),
             fg='white',
             bg=self.colors['primary']
@@ -712,7 +713,7 @@ class ModernLoginSystem:
         
         tk.Label(
             content_frame,
-            text=f"Welcome back, {full_name}! 👋",
+            text=f"Welcome, {full_name}! 👋",
             font=('Arial', 24, 'bold'),
             fg=self.colors['dark'],
             bg='white'
@@ -720,7 +721,6 @@ class ModernLoginSystem:
         
         tk.Label(
             content_frame,
-            text=f"Role: {role.upper()} | Email: {email}",
             font=('Arial', 12),
             fg=self.colors['text'],
             bg='white'
@@ -734,16 +734,16 @@ class ModernLoginSystem:
         self.cursor.execute('SELECT COUNT(*) FROM credentials WHERE owner_id = ?', (self.current_user,))
         cred_count = self.cursor.fetchone()[0]
         
-        # Get category distribution
+        # Get status distribution (changed from category)
         self.cursor.execute('''SELECT category, COUNT(*) FROM credentials 
                              WHERE owner_id = ? GROUP BY category''', (self.current_user,))
-        category_stats = self.cursor.fetchall()
+        status_stats = self.cursor.fetchall()
         
         stats_data = [
             ("Total Students", str(cred_count), self.colors['primary'], "👨‍🎓"),
-            ("Graduates", str(sum(1 for cat, count in category_stats if cat == 'Graduate')), self.colors['success'], "🎓"),
-            ("Undergraduates", str(sum(1 for cat, count in category_stats if cat == 'Undergraduate')), self.colors['info'], "📚"),
-            ("Active Sessions", "1", self.colors['warning'], "👥"),
+            ("Active Students", str(sum(1 for cat, count in status_stats if cat == 'Active')), self.colors['success'], "✅"),
+            ("Graduates", str(sum(1 for cat, count in status_stats if cat == 'Graduate')), self.colors['info'], "🎓"),
+            ("Inactive", str(sum(1 for cat, count in status_stats if cat == 'Inactive')), self.colors['warning'], "⏸️"),
         ]
         
         for title, value, color, icon in stats_data:
@@ -816,7 +816,7 @@ class ModernLoginSystem:
         recent_students = self.cursor.fetchall()
         
         if recent_students:
-            for i, (fname, lname, category, updated) in enumerate(recent_students):
+            for i, (fname, lname, status, updated) in enumerate(recent_students):
                 row_frame = tk.Frame(activity_content, bg='white')
                 row_frame.pack(fill=tk.X, pady=5)
                 
@@ -831,7 +831,7 @@ class ModernLoginSystem:
                 
                 tk.Label(
                     row_frame,
-                    text=f"({category})",
+                    text=f"({status})",
                     font=('Arial', 10),
                     bg='white',
                     fg=self.colors['text'],
@@ -1026,36 +1026,36 @@ class ModernLoginSystem:
         search_entry.bind('<FocusOut>', lambda e: search_entry.insert(0, "Search student records...") if not search_entry.get() else None)
         search_entry.bind('<KeyRelease>', lambda e: self.filter_credentials())
         
-        # Category filter
-        categories = ['All', 'Graduate', 'Undergraduate']
-        self.category_var = tk.StringVar(value='All')
+        # Status filter (changed from Category)
+        statuses = ['All', 'Active', 'Graduate', 'Inactive']  # Changed options
+        self.status_var = tk.StringVar(value='All')  # Changed variable name
         
-        category_label = tk.Label(
+        status_label = tk.Label(
             filter_frame,
-            text="Category:",
+            text="Status:",  # Changed label
             font=('Arial', 11),
             bg=self.colors['light'],
             fg=self.colors['dark']
         )
-        category_label.pack(side=tk.LEFT, padx=(30, 10))
+        status_label.pack(side=tk.LEFT, padx=(30, 10))
         
-        category_menu = ttk.Combobox(
+        status_menu = ttk.Combobox(
             filter_frame,
-            textvariable=self.category_var,
-            values=categories,
+            textvariable=self.status_var,
+            values=statuses,
             font=('Arial', 10),
             state='readonly',
             width=15
         )
-        category_menu.pack(side=tk.LEFT)
-        category_menu.bind('<<ComboboxSelected>>', lambda e: self.filter_credentials())
+        status_menu.pack(side=tk.LEFT)
+        status_menu.bind('<<ComboboxSelected>>', lambda e: self.filter_credentials())
         
         # Student records list frame
         list_frame = tk.Frame(scrollable_frame, bg=self.colors['light'])
         list_frame.pack(fill=tk.BOTH, expand=True, padx=30, pady=(0, 30))
         
         # Create treeview for student records
-        columns = ('ID', 'ID Number', 'First Name', 'Last Name', 'Category', 'Attachments', 'Last Updated')
+        columns = ('ID', 'ID Number', 'First Name', 'Last Name', 'Status', 'Attachments', 'Last Updated')  # Changed column name
         self.cred_tree = ttk.Treeview(
             list_frame,
             columns=columns,
@@ -1069,7 +1069,7 @@ class ModernLoginSystem:
         self.cred_tree.heading('ID Number', text='ID Number', anchor='w')
         self.cred_tree.heading('First Name', text='First Name', anchor='w')
         self.cred_tree.heading('Last Name', text='Last Name', anchor='w')
-        self.cred_tree.heading('Category', text='Category', anchor='w')
+        self.cred_tree.heading('Status', text='Status', anchor='w')  # Changed heading
         self.cred_tree.heading('Attachments', text='Attachments', anchor='w')
         self.cred_tree.heading('Last Updated', text='Last Updated', anchor='w')
         
@@ -1078,7 +1078,7 @@ class ModernLoginSystem:
         self.cred_tree.column('ID Number', width=100)
         self.cred_tree.column('First Name', width=120)
         self.cred_tree.column('Last Name', width=120)
-        self.cred_tree.column('Category', width=100)
+        self.cred_tree.column('Status', width=100)
         self.cred_tree.column('Attachments', width=150)
         self.cred_tree.column('Last Updated', width=150)
         
@@ -1162,7 +1162,7 @@ class ModernLoginSystem:
         # Update immediately
         configure_scrollregion()
     
-    def load_credentials(self, search_text="", category="All"):
+    def load_credentials(self, search_text="", status="All"):  # Changed parameter name
         """Load student records from database"""
         # Clear existing items
         for item in self.cred_tree.get_children():
@@ -1182,9 +1182,9 @@ class ModernLoginSystem:
             params.extend([search_pattern, search_pattern, search_pattern, search_pattern, 
                           search_pattern, search_pattern])
         
-        if category != "All":
+        if status != "All":  # Changed from category
             query += " AND category = ?"
-            params.append(category)
+            params.append(status)
         
         query += " ORDER BY updated_at DESC"
         
@@ -1194,7 +1194,7 @@ class ModernLoginSystem:
         
         # Add to treeview
         for cred in credentials:
-            cred_id, id_number, first_name, last_name, category, attachments_json, updated_at = cred
+            cred_id, id_number, first_name, last_name, status, attachments_json, updated_at = cred
             
             # Parse attachments JSON
             try:
@@ -1208,28 +1208,40 @@ class ModernLoginSystem:
             else:
                 display_attachments = "No attachments"
             
-            self.cred_tree.insert('', 'end', values=(cred_id, id_number, first_name, last_name, category, display_attachments, updated_at))
+            self.cred_tree.insert('', 'end', values=(cred_id, id_number, first_name, last_name, status, display_attachments, updated_at))
     
     def filter_credentials(self):
-        """Filter student records based on search and category"""
+        """Filter student records based on search and status"""
         search_text = self.search_var.get()
-        category = self.category_var.get()
-        self.load_credentials(search_text, category)
+        status = self.status_var.get()  # Changed variable name
+        self.load_credentials(search_text, status)
     
     def export_options(self):
         """Show export options dialog"""
         dialog = tk.Toplevel(self.root)
         dialog.title("Export Options")
-        dialog.geometry("400x300")
+        
+        # Get screen dimensions
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        
+        # Calculate dialog size (40% of screen, but max 450x400)
+        dialog_width = min(int(screen_width * 0.4), 450)
+        dialog_height = min(int(screen_height * 0.5), 400)
+        
+        dialog.geometry(f"{dialog_width}x{dialog_height}")
         dialog.configure(bg=self.colors['background'])
         dialog.transient(self.root)
         dialog.grab_set()
         
         # Center dialog
         dialog.update_idletasks()
-        x = (self.root.winfo_screenwidth() // 2) - (400 // 2)
-        y = (self.root.winfo_screenheight() // 2) - (300 // 2)
-        dialog.geometry(f'400x300+{x}+{y}')
+        x = (screen_width // 2) - (dialog_width // 2)
+        y = (screen_height // 2) - (dialog_height // 2)
+        dialog.geometry(f'{dialog_width}x{dialog_height}+{x}+{y}')
+        
+        # Make dialog non-resizable for this simple dialog
+        dialog.resizable(False, False)
         
         tk.Label(
             dialog,
@@ -1348,10 +1360,10 @@ class ModernLoginSystem:
             elements.append(Spacer(1, 20))
             
             # Create table data
-            table_data = [['ID', 'ID Number', 'Full Name', 'Category', 'Created', 'Updated']]
+            table_data = [['ID', 'ID Number', 'Full Name', 'Status', 'Created', 'Updated']]  # Changed column name
             
             for student in students:
-                cred_id, id_number, first_name, last_name, category, fname, mname, lname, created_at, updated_at = student
+                cred_id, id_number, first_name, last_name, status, fname, mname, lname, created_at, updated_at = student
                 
                 # Format name
                 full_name = f"{first_name} {mname + ' ' if mname else ''}{last_name}".strip()
@@ -1360,7 +1372,7 @@ class ModernLoginSystem:
                 created_date = created_at[:10] if created_at else "N/A"
                 updated_date = updated_at[:10] if updated_at else "N/A"
                 
-                table_data.append([str(cred_id), id_number, full_name, category, created_date, updated_date])
+                table_data.append([str(cred_id), id_number, full_name, status, created_date, updated_date])  # Changed column
             
             # Create table
             table = Table(table_data, colWidths=[0.5*inch, 1*inch, 2.5*inch, 1*inch, 1*inch, 1*inch])
@@ -1391,15 +1403,15 @@ class ModernLoginSystem:
                 spaceAfter=10
             )
             
-            # Count by category
-            categories = {}
+            # Count by status (changed from category)
+            statuses = {}
             for student in students:
-                category = student[4]
-                categories[category] = categories.get(category, 0) + 1
+                status = student[4]  # Changed from category
+                statuses[status] = statuses.get(status, 0) + 1
             
-            summary_text = "Summary by Category:<br/>"
-            for category, count in categories.items():
-                summary_text += f"• {category}: {count} student(s)<br/>"
+            summary_text = "Summary by Status:<br/>"  # Changed text
+            for status, count in statuses.items():
+                summary_text += f"• {status}: {count} student(s)<br/>"
             
             summary = Paragraph(summary_text, summary_style)
             elements.append(summary)
@@ -1425,7 +1437,7 @@ class ModernLoginSystem:
         # Get student record details
         self.cursor.execute('''
             SELECT title, username, password, attachments, category, first_name, middle_name, last_name, created_at, updated_at, 
-                   last_school_year, contact_number, so_number, date_issued, series_year
+                   last_school_year, contact_number, so_number, date_issued, series_year, lrn
             FROM credentials 
             WHERE id = ? AND owner_id = ?
         ''', (cred_id, self.current_user))
@@ -1436,7 +1448,7 @@ class ModernLoginSystem:
             messagebox.showerror("Error", "Student record not found")
             return
         
-        title, id_number, first_name, attachments_json, category, fname, mname, lname, created_at, updated_at, last_school_year, contact_number, so_number, date_issued, series_year = student
+        title, id_number, first_name, attachments_json, status, fname, mname, lname, created_at, updated_at, last_school_year, contact_number, so_number, date_issued, series_year, lrn = student
         
         try:
             # Ask for save location
@@ -1489,19 +1501,20 @@ class ModernLoginSystem:
                 ['First Name', first_name],
                 ['Middle Name', mname if mname else 'N/A'],
                 ['Last Name', lname],
-                ['Category', category],
+                ['Status', status],  # Changed label
                 ['Created Date', created_at[:10] if created_at else 'N/A'],
                 ['Last Updated', updated_at[:10] if updated_at else 'N/A']
             ]
             
-            # Add graduate-specific fields if category is Graduate
-            if category == 'Graduate':
+            # Add graduate-specific fields if status is Graduate
+            if status == 'Graduate':
                 info_data.extend([
                     ['Last School Year Attended', last_school_year if last_school_year else 'N/A'],
                     ['Contact Number', contact_number if contact_number else 'N/A'],
                     ['SO Number', so_number if so_number else 'N/A'],
                     ['Date Issued', date_issued if date_issued else 'N/A'],
-                    ['Series of Year', series_year if series_year else 'N/A']
+                    ['Series of Year', series_year if series_year else 'N/A'],
+                    ['LRN (Learner Reference Number)', lrn if lrn else 'N/A']  # ✅ ADDED LRN
                 ])
             
             info_table = Table(info_data, colWidths=[2*inch, 4*inch])
@@ -1556,7 +1569,7 @@ class ModernLoginSystem:
                 ORDER BY count DESC
             ''', (self.current_user,))
             
-            category_stats = self.cursor.fetchall()
+            status_stats = self.cursor.fetchall()
             
             self.cursor.execute('''
                 SELECT strftime('%Y-%m', created_at) as month, COUNT(*) as count
@@ -1625,26 +1638,26 @@ class ModernLoginSystem:
             elements.append(summary)
             elements.append(Spacer(1, 20))
             
-            # Category Distribution Table
-            if category_stats:
-                cat_title_style = ParagraphStyle(
-                    'CategoryTitle',
+            # Status Distribution Table (changed from Category)
+            if status_stats:
+                status_title_style = ParagraphStyle(
+                    'StatusTitle',
                     parent=styles['Heading3'],
                     fontSize=14,
                     textColor=colors.HexColor('#555555'),
                     spaceAfter=10
                 )
                 
-                cat_title = Paragraph("Distribution by Category:", cat_title_style)
-                elements.append(cat_title)
+                status_title = Paragraph("Distribution by Status:", status_title_style)  # Changed text
+                elements.append(status_title)
                 
-                cat_data = [['Category', 'Number of Students', 'Percentage']]
-                for category, count in category_stats:
+                status_data = [['Status', 'Number of Students', 'Percentage']]  # Changed column name
+                for status, count in status_stats:
                     percentage = (count / total_students * 100) if total_students > 0 else 0
-                    cat_data.append([category, str(count), f"{percentage:.1f}%"])
+                    status_data.append([status, str(count), f"{percentage:.1f}%"])
                 
-                cat_table = Table(cat_data, colWidths=[2*inch, 1.5*inch, 1.5*inch])
-                cat_table.setStyle(TableStyle([
+                status_table = Table(status_data, colWidths=[2*inch, 1.5*inch, 1.5*inch])
+                status_table.setStyle(TableStyle([
                     ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#800000')),  # Maroon
                     ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
                     ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
@@ -1656,7 +1669,7 @@ class ModernLoginSystem:
                     ('FONTSIZE', (0, 1), (-1, -1), 10),
                 ]))
                 
-                elements.append(cat_table)
+                elements.append(status_table)
                 elements.append(Spacer(1, 30))
             
             # Monthly Statistics
@@ -1735,7 +1748,7 @@ class ModernLoginSystem:
             messagebox.showerror("Error", "Student record not found")
             return
         
-        title, id_number, first_name, attachments_json, category, fname, mname, lname, created_at, updated_at = student
+        title, id_number, first_name, attachments_json, status, fname, mname, lname, created_at, updated_at = student  # Changed variable name
         
         # Parse attachments
         try:
@@ -1786,7 +1799,7 @@ class ModernLoginSystem:
                 spaceAfter=20
             )
             
-            subtitle = Paragraph(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Attachments: {len(attachments)}", subtitle_style)
+            subtitle = Paragraph(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Status: {status} | Attachments: {len(attachments)}", subtitle_style)
             elements.append(subtitle)
             
             elements.append(Spacer(1, 30))
@@ -1803,7 +1816,7 @@ class ModernLoginSystem:
             info_text = f"""
             <b>ID Number:</b> {id_number}<br/>
             <b>Full Name:</b> {first_name} {mname + ' ' if mname else ''}{lname}<br/>
-            <b>Category:</b> {category}<br/>
+            <b>Status:</b> {status}<br/>  <!-- Changed label -->
             <b>Created:</b> {created_at[:10] if created_at else 'N/A'}<br/>
             <b>Last Updated:</b> {updated_at[:10] if updated_at else 'N/A'}<br/>
             """
@@ -1893,29 +1906,42 @@ class ModernLoginSystem:
         """Open dialog to add new student record"""
         dialog = tk.Toplevel(self.root)
         dialog.title("Add New Student Record")
-        dialog.geometry("500x750")  # Increased height for graduate fields
+        
+        # Get screen dimensions
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        
+        # Calculate dialog size (80% of screen, but max 600x700)
+        dialog_width = min(int(screen_width * 0.8), 600)
+        dialog_height = min(int(screen_height * 0.8), 700)
+        
+        dialog.geometry(f"{dialog_width}x{dialog_height}")
         dialog.configure(bg=self.colors['background'])
         dialog.transient(self.root)
         dialog.grab_set()
         
-        # Center dialog
+        # Center dialog on screen
         dialog.update_idletasks()
-        x = (self.root.winfo_screenwidth() // 2) - (500 // 2)
-        y = (self.root.winfo_screenheight() // 2) - (750 // 2)
-        dialog.geometry(f'500x750+{x}+{y}')
+        x = (screen_width // 2) - (dialog_width // 2)
+        y = (screen_height // 2) - (dialog_height // 2)
+        dialog.geometry(f'{dialog_width}x{dialog_height}+{x}+{y}')
+        
+        # Make dialog resizable
+        dialog.resizable(True, True)
         
         # Create a scrollable canvas with responsive width
         canvas = tk.Canvas(dialog, bg=self.colors['background'])
         scrollbar = ttk.Scrollbar(dialog, orient="vertical", command=canvas.yview)
         scrollable_frame = tk.Frame(canvas, bg=self.colors['background'])
+        scrollable_frame.pack(fill="both", expand=True)
         
         def configure_scrollregion(event=None):
             if canvas.winfo_exists():
                 canvas.configure(scrollregion=canvas.bbox("all"))
-                # Update canvas width
+                # Update canvas width to fit dialog
                 canvas_width = dialog.winfo_width()
                 if canvas_width > 1:
-                    canvas.itemconfig(window_id, width=canvas_width)
+                    canvas.itemconfig(window_id, width=canvas_width-20)  # Subtract scrollbar width
         
         scrollable_frame.bind("<Configure>", configure_scrollregion)
         
@@ -1936,7 +1962,7 @@ class ModernLoginSystem:
         
         # Form fields container
         form_container = tk.Frame(scrollable_frame, bg=self.colors['background'])
-        form_container.pack(fill=tk.BOTH, expand=True, padx=50)
+        form_container.pack(fill=tk.BOTH, expand=True, padx=min(50, int(dialog_width * 0.1)))  # Responsive padding
         
         # Form fields
         fields = [
@@ -1961,7 +1987,13 @@ class ModernLoginSystem:
             frame.pack(fill=tk.X, pady=(0, 10))
             frame.pack_propagate(False)
             
-            entry = tk.Entry(frame, font=('Arial', 11), bd=0, bg=self.colors['card_bg'])
+            entry = tk.Entry(
+                frame,
+                font=('Arial', 11),
+                bd=0,
+                bg=self.colors['card_bg'],
+                fg=self.colors['dark']
+            )
             entry.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=15)
             entry.insert(0, placeholder)
             entry.bind('<FocusIn>', lambda e, w=entry, p=placeholder: w.delete(0, tk.END) if w.get() == p else None)
@@ -1969,58 +2001,63 @@ class ModernLoginSystem:
             
             entries[label_text] = entry
         
-        # Category field
+        # STATUS field (changed from Category)
         tk.Label(
             form_container,
-            text="Category",
+            text="Status",  # Changed from "Category"
             font=('Arial', 10, 'bold'),
             fg=self.colors['primary'],
             bg=self.colors['background']
         ).pack(anchor='w', pady=(10, 5))
         
-        category_frame = tk.Frame(form_container, bg=self.colors['card_bg'], height=40)
-        category_frame.pack(fill=tk.X, pady=(0, 10))
-        category_frame.pack_propagate(False)
+        status_frame = tk.Frame(form_container, bg=self.colors['card_bg'], height=40)
+        status_frame.pack(fill=tk.X, pady=(0, 10))
+        status_frame.pack_propagate(False)
         
-        category_var = tk.StringVar(value="Undergraduate")
+        # Changed values to include "Active" as default
+        status_var = tk.StringVar(value="Active")  # Changed default to "Active"
         
-        def on_category_change(*args):
-            """Show/hide graduate fields based on category selection"""
-            category = category_var.get()
-            if category == "Graduate":
+        def on_status_change(*args):
+            """Show/hide graduate fields based on status selection"""
+            status = status_var.get()
+            if status == "Graduate":  # Only show graduate fields for Graduates
                 for field_name, entry in graduate_entries.items():
                     entry['label'].pack(anchor='w', pady=(10, 5))
                     entry['frame'].pack(fill=tk.X, pady=(0, 10))
+                    entry['widget'].pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=15)
             else:
                 for field_name, entry in graduate_entries.items():
                     entry['label'].pack_forget()
                     entry['frame'].pack_forget()
+                    entry['widget'].pack_forget()
             
             # Update scrollable area
             scrollable_frame.update_idletasks()
             if canvas.winfo_exists():
                 canvas.configure(scrollregion=canvas.bbox("all"))
         
-        category_var.trace_add('write', on_category_change)
+        status_var.trace_add('write', on_status_change)
         
-        category_menu = ttk.Combobox(
-            category_frame,
-            textvariable=category_var,
-            values=['Graduate', 'Undergraduate'],
+        # Updated status options
+        status_menu = ttk.Combobox(
+            status_frame,
+            textvariable=status_var,
+            values=['Active', 'Graduate', 'Inactive'],  # Changed options
             font=('Arial', 11),
             state='readonly'
         )
-        category_menu.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=15)
+        status_menu.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=15)
         
-        entries['Category'] = category_var
+        entries['Status'] = status_var  # Changed key from 'Category' to 'Status'
         
-        # Graduate-specific fields (initially hidden)
+        # Graduate-specific fields (initially hidden) - INCLUDING LRN
         graduate_fields = [
             ("Last School Year Attended", "Enter last school year attended"),
             ("Contact Number", "Enter contact number"),
             ("SO Number", "Enter SO number"),
             ("Date Issued", "Enter date issued (YYYY-MM-DD)"),
-            ("Series of Year", "Enter series of year")
+            ("Series of Year", "Enter series of year"),
+            ("LRN (Learner Reference Number)", "Enter LRN")  # ✅ ADDED LRN FIELD
         ]
         
         graduate_entries = {}
@@ -2040,10 +2077,16 @@ class ModernLoginSystem:
             frame.pack_propagate(False)
 
             # Entry (same padding)
-            entry = tk.Entry(frame, font=('Arial', 11), bd=0, bg=self.colors['card_bg'])
+            entry = tk.Entry(
+                frame, 
+                font=('Arial', 11), 
+                bd=0, 
+                bg=self.colors['card_bg'],
+                fg=self.colors['dark']
+            )
             entry.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=15)
             entry.insert(0, placeholder)
-
+            
             entry.bind('<FocusIn>', lambda e, w=entry, p=placeholder: w.delete(0, tk.END) if w.get() == p else None)
             entry.bind('<FocusOut>', lambda e, w=entry, p=placeholder: w.insert(0, p) if not w.get() else None)
 
@@ -2052,7 +2095,6 @@ class ModernLoginSystem:
                 "frame": frame,
                 "widget": entry
             }
-
         
         # Attachments section
         tk.Label(
@@ -2080,6 +2122,7 @@ class ModernLoginSystem:
             yscrollcommand=listbox_scrollbar.set,
             font=('Arial', 10),
             bg='white',
+            fg=self.colors['dark'],
             height=4
         )
         attachments_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -2155,7 +2198,7 @@ class ModernLoginSystem:
                 first_name = entries['First Name'].get() if hasattr(entries['First Name'], 'get') else entries['First Name']
                 middle_name = entries['Middle Name'].get() if hasattr(entries['Middle Name'], 'get') else entries['Middle Name']
                 last_name = entries['Last Name'].get() if hasattr(entries['Last Name'], 'get') else entries['Last Name']
-                category = entries['Category'].get() if hasattr(entries['Category'], 'get') else entries['Category']
+                status = entries['Status'].get() if hasattr(entries['Status'], 'get') else entries['Status']  # Changed from category
                 
                 # Validate required fields
                 if not id_number or id_number == "Enter student ID number":
@@ -2174,14 +2217,15 @@ class ModernLoginSystem:
                 if middle_name == "Enter middle name (optional)":
                     middle_name = ""
                 
-                # Get graduate-specific fields if category is Graduate
+                # Get graduate-specific fields if status is Graduate
                 last_school_year = ""
                 contact_number = ""
                 so_number = ""
                 date_issued = ""
                 series_year = ""
+                lrn = ""  # ✅ ADDED LRN VARIABLE
                 
-                if category == "Graduate":
+                if status == "Graduate":  # Only show for Graduates
                     last_school_year = graduate_entries["Last School Year Attended"]['widget'].get()
                     if last_school_year == "Enter last school year attended":
                         last_school_year = ""
@@ -2201,6 +2245,10 @@ class ModernLoginSystem:
                     series_year = graduate_entries["Series of Year"]['widget'].get()
                     if series_year == "Enter series of year":
                         series_year = ""
+                    
+                    lrn = graduate_entries["LRN (Learner Reference Number)"]['widget'].get()  # ✅ GET LRN
+                    if lrn == "Enter LRN":
+                        lrn = ""
                 
                 # Create title from name
                 title = f"{first_name} {last_name} ({id_number})"
@@ -2224,14 +2272,14 @@ class ModernLoginSystem:
                             shutil.copy2(file_path, dest_path)
                             saved_attachments.append(dest_path)
                 
-                # Insert into database
+                # Insert into database (using 'category' column for status)
                 self.cursor.execute('''
-                    INSERT INTO credentials (title, username, password, attachments, category, first_name, middle_name, last_name, owner_id, last_school_year, contact_number, so_number, date_issued, series_year)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (title, id_number, first_name, json.dumps(saved_attachments), category, first_name, middle_name, last_name, self.current_user, last_school_year, contact_number, so_number, date_issued, series_year))
+                    INSERT INTO credentials (title, username, password, attachments, category, first_name, middle_name, last_name, owner_id, last_school_year, contact_number, so_number, date_issued, series_year, lrn)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)  -- ✅ ADDED LRN
+                ''', (title, id_number, first_name, json.dumps(saved_attachments), status, first_name, middle_name, last_name, self.current_user, last_school_year, contact_number, so_number, date_issued, series_year, lrn))  # ✅ ADDED LRN
                 self.conn.commit()
                 
-                messagebox.showinfo("Success", f"Student record saved successfully!\n{len(saved_attachments)} attachment(s) added.")
+                messagebox.showinfo("Success", f"Student record saved successfully!\nStatus: {status}\n{len(saved_attachments)} attachment(s) added.")
                 dialog.destroy()
                 self.show_credentials()  # Refresh the student records list
                 
@@ -2302,10 +2350,10 @@ class ModernLoginSystem:
             messagebox.showerror("Error", "Student record not found")
             return
         
-        # Unpack the record
-        (cred_id_db, title, id_number, first_name, attachments_json, category, 
+        # Unpack the record (with LRN)
+        (cred_id_db, title, id_number, first_name, attachments_json, status, 
          fname, mname, lname, owner_id, created_at, updated_at, last_school_year, 
-         contact_number, so_number, date_issued, series_year) = cred
+         contact_number, so_number, date_issued, series_year, lrn) = cred
         
         # Parse attachments
         try:
@@ -2316,29 +2364,42 @@ class ModernLoginSystem:
         # Create edit dialog
         dialog = tk.Toplevel(self.root)
         dialog.title(f"Edit Student Record: {title}")
-        dialog.geometry("500x750")
+        
+        # Get screen dimensions
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        
+        # Calculate dialog size (80% of screen, but max 600x700)
+        dialog_width = min(int(screen_width * 0.8), 600)
+        dialog_height = min(int(screen_height * 0.8), 700)
+        
+        dialog.geometry(f"{dialog_width}x{dialog_height}")
         dialog.configure(bg=self.colors['background'])
         dialog.transient(self.root)
         dialog.grab_set()
         
-        # Center dialog
+        # Center dialog on screen
         dialog.update_idletasks()
-        x = (self.root.winfo_screenwidth() // 2) - (500 // 2)
-        y = (self.root.winfo_screenheight() // 2) - (750 // 2)
-        dialog.geometry(f'500x750+{x}+{y}')
+        x = (screen_width // 2) - (dialog_width // 2)
+        y = (screen_height // 2) - (dialog_height // 2)
+        dialog.geometry(f'{dialog_width}x{dialog_height}+{x}+{y}')
+        
+        # Make dialog resizable
+        dialog.resizable(True, True)
         
         # Create a scrollable canvas with responsive width
         canvas = tk.Canvas(dialog, bg=self.colors['background'])
         scrollbar = ttk.Scrollbar(dialog, orient="vertical", command=canvas.yview)
         scrollable_frame = tk.Frame(canvas, bg=self.colors['background'])
+        scrollable_frame.pack(fill="both", expand=True)
         
         def configure_scrollregion(event=None):
             if canvas.winfo_exists():
                 canvas.configure(scrollregion=canvas.bbox("all"))
-                # Update canvas width
+                # Update canvas width to fit dialog
                 canvas_width = dialog.winfo_width()
                 if canvas_width > 1:
-                    canvas.itemconfig(window_id, width=canvas_width)
+                    canvas.itemconfig(window_id, width=canvas_width-20)  # Subtract scrollbar width
         
         scrollable_frame.bind("<Configure>", configure_scrollregion)
         
@@ -2359,7 +2420,7 @@ class ModernLoginSystem:
         
         # Form fields container
         form_container = tk.Frame(scrollable_frame, bg=self.colors['background'])
-        form_container.pack(fill=tk.BOTH, expand=True, padx=50)
+        form_container.pack(fill=tk.BOTH, expand=True, padx=min(50, int(dialog_width * 0.1)))  # Responsive padding
         
         # Form fields
         fields = [
@@ -2384,31 +2445,31 @@ class ModernLoginSystem:
             frame.pack(fill=tk.X, pady=(0, 10))
             frame.pack_propagate(False)
             
-            entry = tk.Entry(frame, font=('Arial', 11), bd=0, bg=self.colors['card_bg'])
+            entry = tk.Entry(frame, font=('Arial', 11), bd=0, bg=self.colors['card_bg'], fg=self.colors['dark'])
             entry.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=15)
             entry.insert(0, default_value)
             
             entries[label_text] = entry
         
-        # Category field
+        # STATUS field (changed from Category)
         tk.Label(
             form_container,
-            text="Category",
+            text="Status",  # Changed label
             font=('Arial', 10, 'bold'),
             fg=self.colors['primary'],
             bg=self.colors['background']
         ).pack(anchor='w', pady=(10, 5))
         
-        category_frame = tk.Frame(form_container, bg=self.colors['card_bg'], height=40)
-        category_frame.pack(fill=tk.X, pady=(0, 10))
-        category_frame.pack_propagate(False)
+        status_frame = tk.Frame(form_container, bg=self.colors['card_bg'], height=40)
+        status_frame.pack(fill=tk.X, pady=(0, 10))
+        status_frame.pack_propagate(False)
         
-        category_var = tk.StringVar(value=category)
+        status_var = tk.StringVar(value=status)  # Changed variable name
         
-        def on_category_change(*args):
-            """Show/hide graduate fields based on category selection"""
-            cat = category_var.get()
-            if cat == "Graduate":
+        def on_status_change(*args):
+            """Show/hide graduate fields based on status selection"""
+            stat = status_var.get()
+            if stat == "Graduate":  # Only show graduate fields for Graduates
                 # Show graduate fields
                 for field_name, entry in graduate_entries.items():
                     entry_frame = entry['frame']
@@ -2428,26 +2489,28 @@ class ModernLoginSystem:
             if canvas.winfo_exists():
                 canvas.configure(scrollregion=canvas.bbox("all"))
         
-        category_var.trace_add('write', on_category_change)
+        status_var.trace_add('write', on_status_change)  # Changed variable name
         
-        category_menu = ttk.Combobox(
-            category_frame,
-            textvariable=category_var,
-            values=['Graduate', 'Undergraduate'],
+        # Updated status options
+        status_menu = ttk.Combobox(
+            status_frame,
+            textvariable=status_var,
+            values=['Active', 'Graduate', 'Inactive'],  # Changed options
             font=('Arial', 11),
             state='readonly'
         )
-        category_menu.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=15)
+        status_menu.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=15)
         
-        entries['Category'] = category_var
+        entries['Status'] = status_var  # Changed key
         
-        # Graduate-specific fields
+        # Graduate-specific fields (INCLUDING LRN)
         graduate_fields = [
             ("Last School Year Attended", last_school_year if last_school_year else "Enter last school year attended"),
             ("Contact Number", contact_number if contact_number else "Enter contact number"),
             ("SO Number", so_number if so_number else "Enter SO number"),
             ("Date Issued", date_issued if date_issued else "Enter date issued (YYYY-MM-DD)"),
-            ("Series of Year", series_year if series_year else "Enter series of year")
+            ("Series of Year", series_year if series_year else "Enter series of year"),
+            ("LRN (Learner Reference Number)", lrn if lrn else "Enter LRN")  # ✅ ADDED LRN
         ]
         
         graduate_entries = {}
@@ -2466,7 +2529,7 @@ class ModernLoginSystem:
             frame = tk.Frame(form_container, bg=self.colors['card_bg'], height=40)
             
             # Create the entry widget
-            entry = tk.Entry(frame, font=('Arial', 11), bd=0, bg=self.colors['card_bg'])
+            entry = tk.Entry(frame, font=('Arial', 11), bd=0, bg=self.colors['card_bg'], fg=self.colors['dark'])
             entry.insert(0, default_value)
             entry.bind('<FocusIn>', lambda e, w=entry, d=default_value: w.delete(0, tk.END) if w.get() == d else None)
             entry.bind('<FocusOut>', lambda e, w=entry, d=default_value: w.insert(0, d) if not w.get() else None)
@@ -2478,8 +2541,8 @@ class ModernLoginSystem:
                 'widget': entry
             }
         
-        # Show graduate fields if category is Graduate
-        if category == "Graduate":
+        # Show graduate fields if status is Graduate
+        if status == "Graduate":
             for field_name, entry in graduate_entries.items():
                 entry['label'].pack(anchor='w', pady=(10, 5))
                 entry['frame'].pack(fill=tk.X, pady=(0, 10))
@@ -2511,6 +2574,7 @@ class ModernLoginSystem:
             yscrollcommand=listbox_scrollbar.set,
             font=('Arial', 10),
             bg='white',
+            fg=self.colors['dark'],
             height=4
         )
         attachments_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -2591,7 +2655,7 @@ class ModernLoginSystem:
                 first_name = entries['First Name'].get()
                 middle_name = entries['Middle Name'].get()
                 last_name = entries['Last Name'].get()
-                category = entries['Category'].get()
+                status = entries['Status'].get()  # Changed variable name
                 
                 # Validate required fields
                 if not id_number:
@@ -2606,14 +2670,15 @@ class ModernLoginSystem:
                     messagebox.showerror("Error", "Last Name is required")
                     return
                 
-                # Get graduate-specific fields if category is Graduate
+                # Get graduate-specific fields if status is Graduate
                 last_school_year = ""
                 contact_number = ""
                 so_number = ""
                 date_issued = ""
                 series_year = ""
+                lrn = ""  # ✅ ADDED LRN
                 
-                if category == "Graduate":
+                if status == "Graduate":  # Changed condition
                     last_school_year = graduate_entries["Last School Year Attended"]['widget'].get()
                     if last_school_year == "Enter last school year attended":
                         last_school_year = ""
@@ -2633,6 +2698,10 @@ class ModernLoginSystem:
                     series_year = graduate_entries["Series of Year"]['widget'].get()
                     if series_year == "Enter series of year":
                         series_year = ""
+                    
+                    lrn = graduate_entries["LRN (Learner Reference Number)"]['widget'].get()  # ✅ GET LRN
+                    if lrn == "Enter LRN":
+                        lrn = ""
                 
                 # Create title from name
                 title = f"{first_name} {last_name} ({id_number})"
@@ -2670,22 +2739,22 @@ class ModernLoginSystem:
                             shutil.copy2(file_path, dest_path)
                             saved_attachments.append(dest_path)
                 
-                # Update database
+                # Update database (WITH LRN)
                 self.cursor.execute('''
                     UPDATE credentials 
                     SET title = ?, username = ?, password = ?, attachments = ?, 
                         category = ?, first_name = ?, middle_name = ?, 
                         last_name = ?, last_school_year = ?, contact_number = ?,
-                        so_number = ?, date_issued = ?, series_year = ?,
+                        so_number = ?, date_issued = ?, series_year = ?, lrn = ?,  -- ✅ ADDED LRN
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = ? AND owner_id = ?
                 ''', (title, id_number, first_name, json.dumps(saved_attachments), 
-                      category, first_name, middle_name, last_name,
-                      last_school_year, contact_number, so_number, date_issued, series_year,
+                      status, first_name, middle_name, last_name,  # Changed variable
+                      last_school_year, contact_number, so_number, date_issued, series_year, lrn,  # ✅ ADDED LRN
                       cred_id_db, self.current_user))
                 self.conn.commit()
                 
-                messagebox.showinfo("Success", f"Student record updated successfully!\n{len(saved_attachments)} attachment(s) saved.")
+                messagebox.showinfo("Success", f"Student record updated successfully!\nStatus: {status}\n{len(saved_attachments)} attachment(s) saved.")
                 dialog.destroy()
                 self.show_credentials()  # Refresh the student records list
                 
@@ -2747,10 +2816,10 @@ class ModernLoginSystem:
         item = self.cred_tree.item(selection[0])
         cred_id = item['values'][0]
         
-        # Get student record details from database
+        # Get student record details from database (WITH LRN)
         self.cursor.execute('''
             SELECT title, username, password, attachments, category, first_name, middle_name, last_name, created_at, updated_at, 
-                   last_school_year, contact_number, so_number, date_issued, series_year
+                   last_school_year, contact_number, so_number, date_issued, series_year, lrn
             FROM credentials 
             WHERE id = ? AND owner_id = ?
         ''', (cred_id, self.current_user))
@@ -2760,7 +2829,8 @@ class ModernLoginSystem:
             messagebox.showerror("Error", "Student record not found")
             return
         
-        title, id_number, first_name, attachments_json, category, fname, mname, lname, created_at, updated_at, last_school_year, contact_number, so_number, date_issued, series_year = cred
+        # Unpack with LRN
+        title, id_number, first_name, attachments_json, status, fname, mname, lname, created_at, updated_at, last_school_year, contact_number, so_number, date_issued, series_year, lrn = cred
         
         # Parse attachments
         try:
@@ -2771,29 +2841,42 @@ class ModernLoginSystem:
         # Create view dialog
         dialog = tk.Toplevel(self.root)
         dialog.title(f"Student Record: {title}")
-        dialog.geometry("800x750")  # Adjusted size
+        
+        # Get screen dimensions
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        
+        # Calculate dialog size (85% of screen, but max 900x800)
+        dialog_width = min(int(screen_width * 0.85), 900)
+        dialog_height = min(int(screen_height * 0.85), 800)
+        
+        dialog.geometry(f"{dialog_width}x{dialog_height}")
         dialog.configure(bg=self.colors['background'])
         dialog.transient(self.root)
         dialog.grab_set()
         
-        # Center dialog
+        # Center dialog on screen
         dialog.update_idletasks()
-        x = (self.root.winfo_screenwidth() // 2) - (800 // 2)
-        y = (self.root.winfo_screenheight() // 2) - (750 // 2)
-        dialog.geometry(f'800x750+{x}+{y}')
+        x = (screen_width // 2) - (dialog_width // 2)
+        y = (screen_height // 2) - (dialog_height // 2)
+        dialog.geometry(f'{dialog_width}x{dialog_height}+{x}+{y}')
+        
+        # Make dialog resizable
+        dialog.resizable(True, True)
         
         # Create a scrollable canvas with responsive width
         canvas = tk.Canvas(dialog, bg=self.colors['background'])
         scrollbar = ttk.Scrollbar(dialog, orient="vertical", command=canvas.yview)
         scrollable_frame = tk.Frame(canvas, bg=self.colors['background'])
+        scrollable_frame.pack(fill="both", expand=True)
         
         def configure_scrollregion(event=None):
             if canvas.winfo_exists():
                 canvas.configure(scrollregion=canvas.bbox("all"))
-                # Update canvas width
+                # Update canvas width to fit dialog
                 canvas_width = dialog.winfo_width()
                 if canvas_width > 1:
-                    canvas.itemconfig(canvas_window, width=canvas_width)
+                    canvas.itemconfig(canvas_window, width=canvas_width-20)  # Subtract scrollbar width
         
         scrollable_frame.bind("<Configure>", configure_scrollregion)
         
@@ -2814,7 +2897,7 @@ class ModernLoginSystem:
         
         tk.Label(
             scrollable_frame,
-            text=f"Category: {category} | Attachments: {len(attachments)}",
+            text=f"Status: {status} | Attachments: {len(attachments)}",
             font=('Arial', 11),
             fg=self.colors['text'],
             bg=self.colors['background']
@@ -2843,13 +2926,17 @@ class ModernLoginSystem:
             images_scrollbar = ttk.Scrollbar(attachments_frame, orient="horizontal", command=images_canvas.xview)
             images_inner_frame = tk.Frame(images_canvas, bg=self.colors['card_bg'])
             
-            images_canvas.create_window((0, 0), window=images_inner_frame, anchor="nw")
+            canvas_window_id = images_canvas.create_window((0, 0), window=images_inner_frame, anchor="nw")
             images_canvas.configure(xscrollcommand=images_scrollbar.set)
             
             # Function to configure canvas
             def configure_images_canvas(e):
                 if images_canvas.winfo_exists():
                     images_canvas.configure(scrollregion=images_canvas.bbox("all"))
+                    # Auto-adjust canvas width
+                    canvas_width = attachments_frame.winfo_width()
+                    if canvas_width > 1:
+                        images_canvas.itemconfig(canvas_window_id, width=canvas_width-20)
             
             images_inner_frame.bind("<Configure>", configure_images_canvas)
             
@@ -2950,6 +3037,9 @@ class ModernLoginSystem:
             if image_paths:
                 images_canvas.pack(fill=tk.X, expand=True)
                 images_scrollbar.pack(fill=tk.X)
+                
+                # Bind to dialog resize
+                dialog.bind("<Configure>", lambda e: configure_images_canvas(None))
         else:
             # No attachments
             tk.Label(
@@ -2974,14 +3064,15 @@ class ModernLoginSystem:
             ("🔄 Updated:", updated_at)
         ]
         
-        # Add graduate-specific fields if category is Graduate
-        if category == "Graduate":
+        # Add graduate-specific fields if status is Graduate (INCLUDING LRN)
+        if status == 'Graduate':
             fields.extend([
                 ("🎓 Last School Year Attended:", last_school_year if last_school_year else "N/A"),
                 ("📱 Contact Number:", contact_number if contact_number else "N/A"),
                 ("📋 SO Number:", so_number if so_number else "N/A"),
                 ("📅 Date Issued:", date_issued if date_issued else "N/A"),
-                ("📊 Series of Year:", series_year if series_year else "N/A")
+                ("📊 Series of Year:", series_year if series_year else "N/A"),
+                ("🔢 LRN (Learner Reference Number):", lrn if lrn else "N/A")  # ✅ ADDED LRN DISPLAY
             ])
         
         for i, (label_text, value) in enumerate(fields):
@@ -3294,11 +3385,28 @@ class ModernLoginSystem:
         """Popup theme selector and apply theme immediately."""
         dialog = tk.Toplevel(self.root)
         dialog.title("Theme Settings")
-        dialog.geometry("420x360")
-        dialog.resizable(False, False)
+        
+        # Get screen dimensions
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        
+        # Calculate dialog size (40% of screen, but max 450x400)
+        dialog_width = min(int(screen_width * 0.4), 450)
+        dialog_height = min(int(screen_height * 0.5), 400)
+        
+        dialog.geometry(f"{dialog_width}x{dialog_height}")
         dialog.configure(bg="white")
         dialog.transient(self.root)
         dialog.grab_set()
+        
+        # Center dialog
+        dialog.update_idletasks()
+        x = (screen_width // 2) - (dialog_width // 2)
+        y = (screen_height // 2) - (dialog_height // 2)
+        dialog.geometry(f'{dialog_width}x{dialog_height}+{x}+{y}')
+        
+        # Make dialog non-resizable
+        dialog.resizable(False, False)
 
         tk.Label(
             dialog,
@@ -3434,13 +3542,17 @@ class ModernLoginSystem:
            • Export system statistics
            • Export with attached images
         
-        3. 🎓 Graduate vs Undergraduate
+        3. 🎓 Student Status
+           • Active: Currently enrolled students
+           • Graduate: Students who have completed their studies
+           • Inactive: Students who are no longer active
            • Graduate students have additional fields:
              - Last School Year Attended
              - Contact Number
              - SO Number
              - Date Issued
              - Series of Year
+             - LRN (Learner Reference Number)
         
         4. 📁 Attachments
            • Upload images and documents for each student
@@ -3474,16 +3586,28 @@ class ModernLoginSystem:
         """Open change password window"""
         dialog = tk.Toplevel(self.root)
         dialog.title("Change Password")
-        dialog.geometry("400x300")
+        
+        # Get screen dimensions
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        
+        # Calculate dialog size (40% of screen, but max 450x400)
+        dialog_width = min(int(screen_width * 0.4), 450)
+        dialog_height = min(int(screen_height * 0.5), 400)
+        
+        dialog.geometry(f"{dialog_width}x{dialog_height}")
         dialog.configure(bg=self.colors['background'])
         dialog.transient(self.root)
         dialog.grab_set()
         
         # Center dialog
         dialog.update_idletasks()
-        x = (self.root.winfo_screenwidth() // 2) - (400 // 2)
-        y = (self.root.winfo_screenheight() // 2) - (300 // 2)
-        dialog.geometry(f'400x300+{x}+{y}')
+        x = (screen_width // 2) - (dialog_width // 2)
+        y = (screen_height // 2) - (dialog_height // 2)
+        dialog.geometry(f'{dialog_width}x{dialog_height}+{x}+{y}')
+        
+        # Make dialog non-resizable for this simple dialog
+        dialog.resizable(False, False)
         
         tk.Label(
             dialog,
